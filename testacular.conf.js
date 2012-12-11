@@ -9,8 +9,8 @@ basePath = '';
 files = [
   JASMINE,
   JASMINE_ADAPTER,
-  'app/scripts/vendor/angular.js',
-  'test/vendor/angular-mocks.js',
+  'app/components/angular-complete/angular.js',
+  'app/components/angular-complete/angular-mocks.js',
   'app/scripts/*.js',
   'app/scripts/**/*.js',
   'test/mock/**/*.js',
