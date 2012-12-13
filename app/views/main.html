@@ -1,21 +1,20 @@
-<div id="main" data-role="page" ngm-pagebeforeshow="refreshTodos()" ngm-swipeleft="showSettings()">
+<div id="main" data-role="page" ngm-pagebeforeshow="refresh()" ngm-swipeleft="showSettings()">
 	<div data-role="header">
-		<h1>Todos</h1>
-		<a href="" id="saveTodos" data-role="button" ngm-click="saveTodos()">Save</a>
+		<h1>Vocabulary</h1>
+		<a href="" id="save" data-role="button" ngm-click="save()">Save</a>
 		<a href="#settings" data-role="button">Settings</a>
 	</div>
 
 	<div data-role="content">
 		<div class="hero-unit">
-			<h1>Cheerio!</h1>
-			<p>You now have</p>
-			<ul data-role="listview" data-inset="true">
-				<li ng-repeat="thing in awesomeThings">
-					<a href="">{{thing}}</a>
+			<ul data-role="listview" data-autodividers="true" data-inset="true">
+				<li ng-repeat="word in words">
+					<h3>{{word.w}}</h3>
+					<p><strong>{{word.t}}</strong></p>
+					<p>{{word.d}}</p>
+					<p class="ui-li-aside"><strong>50</strong>%</p>
 				</li>
 			</ul>
-			<p>installed.</p>
-			<h3>Enjoy coding! - Yeoman</h3>
 		</div>
 	</div>
 </div>

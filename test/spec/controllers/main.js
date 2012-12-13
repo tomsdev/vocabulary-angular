@@ -6,7 +6,7 @@ describe('Controller: MainCtrl', function() {
   beforeEach(module('vocabularyAngularApp'));
 
   var MainCtrl,
-    scope;
+	    scope;
 
   // Initialize the controller and a mock scope
   beforeEach(inject(function($controller) {
@@ -16,7 +16,7 @@ describe('Controller: MainCtrl', function() {
     });
   }));
 
-  it('should attach a list of awesomeThings to the scope', function() {
-    expect(scope.awesomeThings.length).toBe(3);
+  it('should attach a list of words to the scope', function() {
+    expect(scope.words.length).toBe(5);
   });
 });

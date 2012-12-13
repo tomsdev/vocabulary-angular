@@ -1,9 +1,5 @@
 'use strict';
 
-vocabularyAngularApp.controller('MainCtrl', function($scope) {
-  $scope.awesomeThings = [
-    'HTML5 Boilerplate',
-    'AngularJS',
-    'Testacular'
-  ];
+vocabularyAngularApp.controller('MainCtrl', function($scope, WordsDataService) {
+  $scope.words = WordsDataService.get();
 });
