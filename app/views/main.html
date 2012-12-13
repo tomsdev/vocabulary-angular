@@ -1,9 +1,21 @@
-<div class="hero-unit">
-  <h1>Cheerio!</h1>
-  <p>You now have</p>
-  <ul>
-		<li ng-repeat="thing in awesomeThings">{{thing}}</li>
-  </ul>
-  <p>installed.</p>
-  <h3>Enjoy coding! - Yeoman</h3>
+<div id="main" data-role="page" ngm-pagebeforeshow="refreshTodos()" ngm-swipeleft="showSettings()">
+	<div data-role="header">
+		<h1>Todos</h1>
+		<a href="" id="saveTodos" data-role="button" ngm-click="saveTodos()">Save</a>
+		<a href="#settings" data-role="button">Settings</a>
+	</div>
+
+	<div data-role="content">
+		<div class="hero-unit">
+			<h1>Cheerio!</h1>
+			<p>You now have</p>
+			<ul data-role="listview" data-inset="true">
+				<li ng-repeat="thing in awesomeThings">
+					<a href="">{{thing}}</a>
+				</li>
+			</ul>
+			<p>installed.</p>
+			<h3>Enjoy coding! - Yeoman</h3>
+		</div>
+	</div>
 </div>
