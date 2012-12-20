@@ -1,0 +1,9 @@
+{
+  "name": "jqmobile-metro-theme",
+  "version": "0.0.0",
+  "commit": "73f0661220a46b5652ff30f804b76ce0a34f1f5d",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/sgrebnov/jqmobile-metro-theme.git"
+  }
+}
