@@ -6,17 +6,25 @@ describe('Controller: MainCtrl', function() {
   beforeEach(module('vocabularyAngularApp'));
 
   var MainCtrl,
-	    scope;
+	    scope,
+	    navigateMock;
 
   // Initialize the controller and a mock scope
   beforeEach(inject(function($controller) {
+	  navigateMock = jasmine.createSpy();
+
     scope = {};
     MainCtrl = $controller('MainCtrl', {
-      $scope: scope
+      $scope: scope,
+	    $navigate: navigateMock
     });
   }));
 
-  it('should attach a list of words to the scope', function() {
-    expect(scope.words.length).toBe(5);
-  });
+	describe('back', function() {
+
+		it('should navigate back', function() {
+			scope.back();
+			expect(navigateMock).toHaveBeenCalledWith('back');
+		})
+	})
 });

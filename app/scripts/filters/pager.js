@@ -1,7 +1,9 @@
 'use strict';
 
-//TODO: ajouter des numéros de paginations?
-
+/**
+ * Filter that allow to paginate an array.
+ * todo: add pages with numbers and next/previous
+ */
 vocabularyAngularApp.filter('pager', function() {
 	return function(array, stateProperty, pageSize) {
 		if (!(array instanceof Array)) return array;
@@ -10,11 +12,9 @@ vocabularyAngularApp.filter('pager', function() {
 		}
 
 		var scope = this;
-		pageSize = pageSize ? (+pageSize) : 10;
+		pageSize = pageSize ? (+pageSize) : 3;
 
 		var paginated = array.slice(0, pageSize);
-
-		console.log(paginated);
 		return paginated;
 	}
 });

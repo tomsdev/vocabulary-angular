@@ -1,1 +1,6 @@
 /* Will be compiled down to a single stylesheet with your sass files */
+
+/* add a margin between form inputs */
+.ui-field-contain input.ui-input-text, .ui-field-contain textarea.ui-input-text {
+	margin-bottom: 10px;
+}
