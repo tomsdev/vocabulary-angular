@@ -3,17 +3,13 @@
 /**
  * Data service for the words objects.
  */
-vocabularyAngularApp.service('WordsDataService', function() {
+vocabularyAngularApp.service('wordsDataService', function(dataStorage) {
 
 	var isInit = false,
-			words = [
-				// ad: timestamp date added; qz: timestamp date last time quized; s: nb of quiz sucess without fail
-				{w:"car", t:"voiture", d:"", inf:{ad:1355980563534, qz:0, s:1}},
-				{w:"house", t:"maison", d:"", inf:{ad:1355980563534, qz:0, s:0}},
-				{w:"computer", t:"ordinateur", d:"", inf:{ad:1355980563534, qz:0, s:2}},
-				{w:"make a bundle", t:"faire de l'argent", d:"Microsoft made a bundle on Windows 8", inf:{ad:1355980563534, qz:0, s:-1}},
-				{w:"bike", t:"vélo", d:"", inf:{ad:1355980563534, qz:0, s:-2}}
-			];
+			dataStore = "wordsdatastore",
+			data = {
+				words: []
+			};
 
 	function getCurrentTimestamp() {
 		return Date.now();
@@ -27,20 +23,21 @@ vocabularyAngularApp.service('WordsDataService', function() {
 		 */
 		get: function() {
 			if (!isInit) {
-				angular.forEach(words, function(word) {
-					computeWordScore(word);
-				});
+				var dataSaved = dataStorage.getObject(dataStore);
+				if (dataSaved) {
+					data = dataSaved;
+				}
 				isInit = true;
 			}
-
-			return words;
+			return data.words;
 		},
 		/**
 		 * Add the word in the data service.
 		 * @param {Word} word
 		 */
 		add: function(word) {
-			words.unshift(word);
+			data.words.unshift(word);
+			dataStorage.setObject(dataStore, data);
 		},
 		/**
 		 * Add the words in the data service.
@@ -48,26 +45,29 @@ vocabularyAngularApp.service('WordsDataService', function() {
 		 */
 		addArray: function(newWords) {
 			angular.forEach(newWords, function(word) {
-				words.unshift(word);
+				data.words.unshift(word);
 			});
+			dataStorage.setObject(dataStore, data);
 		},
 		/**
 		 * Reset the word success to 1 if it is negative or increment it by one.
 		 * @param {Word} word
 		 */
 		incrementSuccess: function(word) {
-			var s = word.inf.s;
-			word.inf.s = s < 0 ? 1 : s + 1;
-			word.inf.qz = getCurrentTimestamp();
+			var success = word.infos.success;
+			word.infos.success = success < 0 ? 1 : success + 1;
+			word.infos.lastQuizDate = getCurrentTimestamp();
+			updateWordScore(word);
 		},
 		/**
 		 * Reset the word success to -1 if it is positive or decrement it by one.
 		 * @param {Word} word
 		 */
 		decrementSuccess: function(word) {
-			var s = word.inf.s;
-			word.inf.s = s > 0 ? -1 : s - 1;
-			word.inf.qz = getCurrentTimestamp();
+			var success = word.infos.success;
+			word.infos.success = success > 0 ? -1 : success - 1;
+			word.infos.lastQuizDate = getCurrentTimestamp();
+			updateWordScore(word);
 		}
 	};
 });

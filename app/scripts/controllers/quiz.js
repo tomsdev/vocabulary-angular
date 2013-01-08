@@ -3,8 +3,8 @@
 /**
  * Controller for the quiz.
  */
-vocabularyAngularApp.controller('QuizCtrl', ["$scope", "WordsDataService", function($scope, WordsDataService) {
-	var words = WordsDataService.get();
+vocabularyAngularApp.controller('QuizCtrl', ["$scope", "wordsDataService", function($scope, wordsDataService) {
+	var words = wordsDataService.get();
 
 	/**
 	 * Index of the current word in the quiz.
@@ -40,12 +40,12 @@ vocabularyAngularApp.controller('QuizCtrl', ["$scope", "WordsDataService", funct
 	};
 
 	$scope.markAsKnown = function() {
-		WordsDataService.incrementSuccess($scope.getCurrentWord());
+		wordsDataService.incrementSuccess($scope.getCurrentWord());
 		$scope.goNextWord();
 	};
 
 	$scope.markAsUnknown = function() {
-		WordsDataService.decrementSuccess($scope.getCurrentWord());
+		wordsDataService.decrementSuccess($scope.getCurrentWord());
 		$scope.goNextWord();
 	};
 }]);

@@ -21,22 +21,21 @@ describe('Controller: AddCtrl', function() {
 
     AddCtrl = $controller('AddCtrl', {
       $scope: scope,
-	    WordsDataService: wordsDataServiceMock
+	    wordsDataService: wordsDataServiceMock
     });
   }));
 
 	it('should attach an empty word', function() {
-		expect(scope.newWord.w).toBe("");
-		expect(scope.newWord.t).toBe("");
-		expect(scope.newWord.d).toBe("");
+		expect(scope.newWord.text).toBe("");
+		expect(scope.newWord.translation).toBe("");
+		expect(scope.newWord.description).toBe("");
 	});
 
 	describe('addWord', function() {
 		var newWord;
 
 		beforeEach(function () {
-			newWord = {w:"money", t:"argent", d:"", pc:0};
-			scope.newWord = newWord;
+			scope.newWord = newWord = createWord();
 		});
 
 		it('should add the word', function () {

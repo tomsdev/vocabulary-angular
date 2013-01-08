@@ -3,8 +3,7 @@
 /**
  * Controller for the form which add a new word.
  */
-vocabularyAngularApp.controller('AddCtrl', ["$scope", "WordsDataService", function($scope, WordsDataService) {
-
+vocabularyAngularApp.controller('AddCtrl', ["$scope", "wordsDataService", function($scope, wordsDataService) {
 	/**
 	 * Instance of the word.
 	 * @type {Word}
@@ -15,7 +14,7 @@ vocabularyAngularApp.controller('AddCtrl', ["$scope", "WordsDataService", functi
 	 * Add $scope.newWord in the data service.
 	 */
 	$scope.addWord = function () {
-		WordsDataService.add($scope.newWord);
+		wordsDataService.add($scope.newWord);
 		$scope.newWord = createWord();
 		$scope.back();
 	};

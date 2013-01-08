@@ -3,6 +3,6 @@
 /**
  * Controller that expose the words.
  */
-vocabularyAngularApp.controller('ListCtrl', ["$scope", "WordsDataService", function($scope, WordsDataService) {
-	$scope.words = WordsDataService.get();
+vocabularyAngularApp.controller('ListCtrl', ["$scope", "wordsDataService", function($scope, wordsDataService) {
+	$scope.words = wordsDataService.get();
 }]);

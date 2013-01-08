@@ -9,13 +9,14 @@
  *           s is the number of consecutive success for this word in a quiz.
  */
 function Word() {
-	this.w = "";
-	this.t = "";
-	this.d = "";
-	this.inf = {
-		ad: 0,
-		qz: 0,
-		s: 0
+	this.text = "";
+	this.translation = "";
+	this.description = "";
+	this.infos = {
+		creationDate: 0,
+		lastQuizDate: 0,
+		success: 0,
+		score: 0
 	};
 }
 
@@ -24,15 +25,24 @@ function Word() {
  * @return {Word}
  */
 function createWord() {
-	return {w:"", t:"", d:"", inf:{ad:0, qz:0, s:0}};
+	return {
+		text:"",
+		translation:"",
+		description:"",
+		infos: {
+			creationDate: 0,
+			lastQuizDate: 0,
+			success: 0,
+			score: 0
+		}
+	};
 }
 
 /**
  * Calculate the word score, it represents the knowledge of the word by the user.
- * Store it in word.inf.score .
+ * Store it in word.infos.score
  * @param {Word} word
  */
-function computeWordScore(word) {
-	word.inf.s = word.inf.s || 0;
-	return word.inf.score =  word.inf.s;
+function updateWordScore(word) {
+	word.infos.score =  word.infos.success * 25;
 }

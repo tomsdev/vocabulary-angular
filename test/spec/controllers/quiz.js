@@ -7,22 +7,31 @@ describe('Controller: QuizCtrl', function() {
 
   var QuizCtrl,
       scope,
-	    wordsDataServiceMock;
+	    wordsDataServiceMock,
+		  word1,
+		  word2;
 
   // Initialize the controller and a mock scope
   beforeEach(inject(function($controller) {
 	  wordsDataServiceMock = {
 		  get: function() {
-			  return [{w:"word1", inf:{qz:123, s:2}}, {w:"word2"}];
+			  word1 = createWord();
+			  word1.text = "word1";
+			  word1.infos.lastQuizDate = 123;
+			  word1.infos.success = 2;
+
+			  word2 = createWord();
+			  word2.text = "word2";
+
+			  return [word1, word2];
 		  },
 		  incrementSuccess: jasmine.createSpy(),
 		  decrementSuccess: jasmine.createSpy()
 	  };
 
-	  scope = {};
     QuizCtrl = $controller('QuizCtrl', {
-      $scope: scope,
-	    WordsDataService: wordsDataServiceMock
+      $scope: scope = {},
+	    wordsDataService: wordsDataServiceMock
     });
   }));
 
@@ -39,19 +48,17 @@ describe('Controller: QuizCtrl', function() {
 	});
 
 	describe('getCurrentWord', function() {
-
 		it('should return the first word', function() {
-			expect(scope.getCurrentWord().w).toBe("word1");
+			expect(scope.getCurrentWord()).toBe(word1);
 		});
 
 		it('should return the second word', function() {
 			scope.quizIndex = 1;
-			expect(scope.getCurrentWord().w).toBe("word2");
+			expect(scope.getCurrentWord()).toBe(word2);
 		});
 	});
 
 	describe('goNextWord', function() {
-
 		it('should increment the quiz index', function() {
 			scope.goNextWord();
 			expect(scope.quizIndex).toBe(1);
@@ -72,7 +79,6 @@ describe('Controller: QuizCtrl', function() {
 	});
 
 	describe('showAnswer', function() {
-
 		it('should set the answer visibility to true', function() {
 			scope.showAnswer();
 			expect(scope.isAnswerVisible).toBe(true);
@@ -80,7 +86,6 @@ describe('Controller: QuizCtrl', function() {
 	});
 
 	describe('markAsKnown', function() {
-
 		it('should increment the number of success of the word', function() {
 			var actualWord = scope.getCurrentWord();
 			scope.markAsKnown();
@@ -96,7 +101,6 @@ describe('Controller: QuizCtrl', function() {
 	});
 
 	describe('markAsUnknown', function() {
-
 		it('should decrement the number of success of the word', function() {
 			var actualWord = scope.getCurrentWord();
 			scope.markAsUnknown();

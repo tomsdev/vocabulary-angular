@@ -17,10 +17,9 @@ describe('Controller: ListCtrl', function() {
 		  }
 	  };
 
-    scope = {};
     ListCtrl = $controller('ListCtrl', {
-      $scope: scope,
-	    WordsDataService: wordsDataServiceMock
+      $scope: scope = {},
+	    wordsDataService: wordsDataServiceMock
     });
   }));
 

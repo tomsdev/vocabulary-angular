@@ -24,7 +24,7 @@
 	<script src="components/json3/lib/json3.js"></script>
 	<![endif]-->
 
-	<!-- Add your site or application content here -->
+	<!-- application content -->
 	<div class="container" ng-controller="MainCtrl">
 
 		<div id="list" data-role="page" ng-controller="ListCtrl"
@@ -42,11 +42,11 @@
 				<div class="hero-unit">
 					<ul data-role="listview" data-inset="true" data-icon="">
 						<!--<li data-role="list-divider">A</li>-->
-						<li ng-repeat="word in words | filter:filterText | orderBy:'inf.score' | pager:'wordsPager':4">
-							<p><h3>{{word.w}}</h3></p>
-							<p><strong>{{word.t}}</strong></p>
-							<p>{{word.d}}</p>
-							<p class="ui-li-aside"><strong>{{word.inf.score}}</strong>%</p>
+						<li ng-repeat="word in words | filter:filterText | orderBy:'infos.score' | pager:'wordsPager':4">
+							<p><h3>{{word.text}}</h3></p>
+							<p><strong>{{word.translation}}</strong></p>
+							<p>{{word.description}}</p>
+							<p class="ui-li-aside"><strong>{{word.infos.score}}</strong>%</p>
 						</li>
 						<a ngm-if="wordsPager.hasMore"
 						   ngm-click="wordsPager.loadMore()"
@@ -71,9 +71,9 @@
 			<div data-role="content">
 				<div data-role="fieldcontain">
 					<form ng-submit="addWord()" data-ajax="false">
-						<input type="text" id="inputWord" ng-model="newWord.w" placeholder="word" ng-model-instant>
-						<input type="text" id="inputTranslation" ng-model="newWord.t" placeholder="translation" ng-model-instant>
-						<input type="text" id="inputDescription" ng-model="newWord.d" placeholder="description" ng-model-instant>
+						<input type="text" id="inputWord" ng-model="newWord.text" placeholder="word" ng-model-instant>
+						<input type="text" id="inputTranslation" ng-model="newWord.translation" placeholder="translation" ng-model-instant>
+						<input type="text" id="inputDescription" ng-model="newWord.description" placeholder="description" ng-model-instant>
 						<input type="submit" value="Add">
 					</form>
 				</div>
@@ -91,10 +91,10 @@
 			<div data-role="content">
 				<ul data-role="listview" data-inset="true">
 					<li>
-						<p><h3>{{getCurrentWord().w}}</h3></p>
-						<p ngm-if="isAnswerVisible"><strong>{{getCurrentWord().t}}</strong></p>
-						<p ngm-if="isAnswerVisible">{{getCurrentWord().d}}</p>
-						<p class="ui-li-aside"><strong>{{getCurrentWord().pc}}</strong>%</p>
+						<p><h3>{{getCurrentWord().text}}</h3></p>
+						<p ngm-if="isAnswerVisible"><strong>{{getCurrentWord().translation}}</strong></p>
+						<p ngm-if="isAnswerVisible">{{getCurrentWord().description}}</p>
+						<p class="ui-li-aside"><strong>{{getCurrentWord().infos.score}}</strong>%</p>
 					</li>
 					<a ngm-if="!isAnswerVisible"
 						 ngm-click="showAnswer()"
@@ -132,8 +132,9 @@
 	<!--<script src="components/jqmobile-metro-theme/themes/themeswitcher/jquery.mobile.themeswitcher.js"></script>-->
 
 	<!-- build:js scripts/scripts.js -->
-	<script src="scripts/model/Word.js"></script>
 	<script src="scripts/app.js"></script>
+	<script src="scripts/services/LocalStorage.js"></script>
+	<script src="scripts/model/Word.js"></script>
 	<script src="scripts/filters/pager.js"></script>
 	<script src="scripts/services/WordsDataService.js"></script>
 	<script src="scripts/controllers/main.js"></script>
@@ -148,6 +149,6 @@
 		(function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
 			g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
 			s.parentNode.insertBefore(g,s)}(document,'script'));
-	</script>
+	</script>-->
 </body>
 </html>

@@ -13,15 +13,13 @@ describe('Controller: MainCtrl', function() {
   beforeEach(inject(function($controller) {
 	  navigateMock = jasmine.createSpy();
 
-    scope = {};
     MainCtrl = $controller('MainCtrl', {
-      $scope: scope,
+      $scope: scope= {},
 	    $navigate: navigateMock
     });
   }));
 
 	describe('back', function() {
-
 		it('should navigate back', function() {
 			scope.back();
 			expect(navigateMock).toHaveBeenCalledWith('back');
