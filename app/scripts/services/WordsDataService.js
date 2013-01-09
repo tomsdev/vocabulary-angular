@@ -37,7 +37,7 @@ vocabularyAngularApp.service('wordsDataService', function(dataStorage) {
 		 */
 		add: function(word) {
 			data.words.unshift(word);
-			dataStorage.setObject(dataStore, data);
+			this.saveAll();
 		},
 		/**
 		 * Add the words in the data service.
@@ -47,7 +47,7 @@ vocabularyAngularApp.service('wordsDataService', function(dataStorage) {
 			angular.forEach(newWords, function(word) {
 				data.words.unshift(word);
 			});
-			dataStorage.setObject(dataStore, data);
+			this.saveAll();
 		},
 		/**
 		 * Reset the word success to 1 if it is negative or increment it by one.
@@ -58,6 +58,7 @@ vocabularyAngularApp.service('wordsDataService', function(dataStorage) {
 			word.infos.success = success < 0 ? 1 : success + 1;
 			word.infos.lastQuizDate = getCurrentTimestamp();
 			updateWordScore(word);
+			this.saveAll();
 		},
 		/**
 		 * Reset the word success to -1 if it is positive or decrement it by one.
@@ -68,6 +69,13 @@ vocabularyAngularApp.service('wordsDataService', function(dataStorage) {
 			word.infos.success = success > 0 ? -1 : success - 1;
 			word.infos.lastQuizDate = getCurrentTimestamp();
 			updateWordScore(word);
+			this.saveAll();
+		},
+		/**
+		 * Save all changes to the data storage
+		 */
+		saveAll: function() {
+			dataStorage.setObject(dataStore, data);
 		}
 	};
 });
