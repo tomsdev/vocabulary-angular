@@ -71,7 +71,7 @@
 			<div data-role="content">
 				<div data-role="fieldcontain">
 					<form ng-submit="addWord()" data-ajax="false">
-						<input type="text" id="inputWord" ng-model="newWord.text" placeholder="word" ng-model-instant>
+						<input type="text" id="inputWord" ng-model="newWord.text" placeholder="word" ng-model-instant required>
 						<input type="text" id="inputTranslation" ng-model="newWord.translation" placeholder="translation" ng-model-instant>
 						<input type="text" id="inputDescription" ng-model="newWord.description" placeholder="description" ng-model-instant>
 						<input type="submit" value="Add">
