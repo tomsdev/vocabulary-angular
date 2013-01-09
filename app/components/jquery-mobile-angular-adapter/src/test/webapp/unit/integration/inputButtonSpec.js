@@ -15,10 +15,26 @@ describe("input button", function () {
         expect(createCount).toBe(2);
     });
 
+    it('should use the value attribute', function() {
+        var d = testutils.compileInPage('<input type="button" value="test">Test');
+        var page = d.page;
+        var input = d.element.find("input");
+        var textNode = $(".ui-btn-text", input.parent());
+        expect(textNode.text()).toBe('test');
+    });
+
+    it('should interpolate the value attribute', function() {
+        var d = testutils.compileInPage('<input ng-init="name=\'test\'" type="button" value="{{name}}">Test');
+        var page = d.page;
+        var input = d.element.find("input");
+        var textNode = $(".ui-btn-text", input.parent());
+        expect(textNode.text()).toBe('test');
+    });
+
     it('should allow clicks via ng-click', function () {
         var d = testutils.compileInPage('<input type="button" id="mysel" ng-click="flag = true">Test');
         var page = d.page;
-        var input = d.element;
+        var input = d.element.find("input");
         var scope = input.scope();
         expect(scope.flag).toBeFalsy();
         input.trigger('click');
@@ -28,7 +44,7 @@ describe("input button", function () {
     it('should use the disabled attribute', function () {
         var d = testutils.compileInPage('<input type="button" id="mysel" ng-click="flag = true" ng-disabled="disabled">Test');
         var page = d.page;
-        var input = d.element;
+        var input = d.element.find("input");
         var scope = input.scope();
         var parentDiv = input.parent();
         scope.disabled = false;

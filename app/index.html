@@ -33,7 +33,7 @@
 			<div data-role="header">
 				<h1>Vocabulary</h1>
 				<a href="#add" data-role="button">Add</a>
-				<a href="#quiz" data-role="button">Quiz</a>
+				<a href="quiz" data-role="button">Quiz</a>
 			</div>
 
 			<div data-role="content">
@@ -49,7 +49,7 @@
 							<p class="ui-li-aside"><strong>{{word.infos.score}}</strong>%</p>
 						</li>
 						<a ngm-if="wordsPager.hasMore"
-						   ngm-click="wordsPager.loadMore()"
+						   ngm-vclick="wordsPager.loadMore()"
 						   data-role="button" data-icon="refresh"
 						   href="#"
 						   style="text-align: center;">
@@ -88,7 +88,7 @@
 				<a href="#add" data-role="button">Add</a>
 			</div>
 
-			<div data-role="content">
+			<div data-role="content" ngm-if="!isQuizEnd">
 				<ul data-role="listview" data-inset="true">
 					<li>
 						<p><h3>{{getCurrentWord().text}}</h3></p>
@@ -97,36 +97,40 @@
 						<p class="ui-li-aside"><strong>{{getCurrentWord().infos.score}}</strong>%</p>
 					</li>
 					<a ngm-if="!isAnswerVisible"
-						 ngm-click="showAnswer()"
+						 ngm-vclick="showAnswer()"
 					   data-role="button"
 					   href="#"
-					   style="text-align: center;">
+					   class="centerText">
 						Answer
 					</a>
 					<div ngm-if="isAnswerVisible">
-						<a ngm-click="markAsUnknown()"
+						<a ngm-vclick="markAsKnown()"
 						   data-role="button"
 						   href="#"
-						   style="text-align: center; float: right; width: 49%;">
-							Unknown
-						</a>
-						<a ngm-click="markAsKnown()"
-						   data-role="button"
-						   href="#"
-						   style="text-align: center; float: left; width: 49%;">
+						   class="half left centerText">
 							Known
+						</a>
+						<a ngm-vclick="markAsUnknown()"
+						   data-role="button"
+						   href="#"
+						   class="half right centerText">
+							Unknown
 						</a>
 					</div>
 				</ul>
 			</div>
-		</div>
 
+			<div data-role="content" ngm-if="isQuizEnd">
+				<h3 class="centerText">Quiz end</h3>
+			</div>
+
+		</div>
 	</div>
 
 	<script src="components/jquery/jquery.js"></script>
 	<script src="lib/jquery-mobile/jquery.mobile-1.2.0.js"></script>
 	<script src="components/angular-complete/angular.js"></script>
-	<script src="components/jquery-mobile-angular-adapter/compiled/jquery-mobile-angular-adapter-1.1.1.js"></script>
+	<script src="components/jquery-mobile-angular-adapter/compiled/jquery-mobile-angular-adapter-1.2.0.js"></script>
 	<!--<script src="components/jqmobile-metro-theme/themes/metro/jquery.mobile.metro.theme.init.js"></script>-->
 	<!--<script src="components/jqmobile-metro-theme/themes/themeswitcher/jquery.globalstylesheet.js"></script>-->
 	<!--<script src="components/jqmobile-metro-theme/themes/themeswitcher/jquery.mobile.themeswitcher.js"></script>-->

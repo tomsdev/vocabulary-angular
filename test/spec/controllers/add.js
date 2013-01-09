@@ -26,7 +26,7 @@ describe('Controller: AddCtrl', function() {
   }));
 
 	it('should attach an empty word', function() {
-		expect(scope.newWord.text).toBe("");
+		expect(scope.newWord.text).toBe("ty");
 		expect(scope.newWord.translation).toBe("");
 		expect(scope.newWord.description).toBe("");
 	});

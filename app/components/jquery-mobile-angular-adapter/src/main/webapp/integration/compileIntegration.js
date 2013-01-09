@@ -1,13 +1,6 @@
 (function ($, angular) {
     // Only digest the $.mobile.activePage when rootScope.$digest is called.
     var ng = angular.module('ng');
-    $('div').live('pagebeforeshow', function (event, data) {
-        var page = $(event.target);
-        var currPageScope = page.scope();
-        if (currPageScope) {
-            currPageScope.$root.$digest();
-        }
-    });
 
     $.mobile.autoInitializePage = false;
     var lastCreatedPages = [];
@@ -43,7 +36,15 @@
                     }
                     if (hasPages && !jqmInitialized) {
                         jqmInitialized = true;
-                        $.mobile.initializePage();
+                        var _changePage = $.mobile.changePage;
+                        $.mobile.changePage = function () {};
+                        //$.mobile.changePage.defaults = _changePage.defaults;
+                        try {
+                            $.mobile.initializePage();
+                        } finally {
+                            $.mobile.changePage = _changePage;
+                        }
+                        $rootScope.$broadcast("jqmInit");
                     }
                 }
 
@@ -133,10 +134,19 @@
                 tElement.removeAttr("ngm-page");
                 return {
                     pre:function (scope, iElement, iAttrs) {
+                        if (!$.mobile.pageContainer) {
+                            $.mobile.pageContainer = iElement.parent().addClass("ui-mobile-viewport");
+                        }
+
                         // Create the page widget without the pagecreate-Event.
                         // This does no dom transformation, so it's safe to call this in the prelink function.
                         createPagesWithoutPageCreateEvent(iElement);
                         lastCreatedPages.push(scope);
+                        iElement.bind('pagebeforeshow', function (event) {
+                            var page = $(event.target);
+                            scope.$emit("jqmPagebeforeshow", page);
+                            scope.$root.$digest();
+                        });
                     }
                 };
             }

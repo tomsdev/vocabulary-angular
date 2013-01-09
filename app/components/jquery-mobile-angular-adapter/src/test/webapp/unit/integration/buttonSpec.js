@@ -14,10 +14,32 @@ describe("button", function () {
         expect(createCount).toBe(2);
     });
 
+    it("should allow markup in the button content", function() {
+        var d = testutils.compileInPage('<button>{{name}}</button>');
+        var input = d.element.find("button");
+        var scope = input.scope();
+        scope.name = 'someName';
+        scope.$apply();
+        expect($("span span", input.parent()).text()).toBe(scope.name);
+    });
+
+    it('should allow buttons with icons and text', function() {
+        var d = testutils.compileInPage('<button data-icon="check">{{name}}</button>');
+        var input = d.element.find("button");
+        var scope = input.scope();
+        scope.name = 'someName';
+        scope.$apply();
+        var textNode = $(".ui-btn-text", input.parent());
+        expect(textNode.text()).toBe(scope.name);
+        var iconNode = $(".ui-icon", input.parent());
+        expect(iconNode.length).toBe(1);
+        expect($.trim(iconNode.text())).toBe('');
+    });
+
     it('should allow clicks via ng-click', function () {
         var d = testutils.compileInPage('<button id="mysel" ng-click="flag = true">Test</button>');
         var page = d.page;
-        var input = d.element;
+        var input = d.element.find("button");
         var scope = input.scope();
         expect(scope.flag).toBeFalsy();
         input.trigger('click');
@@ -27,7 +49,7 @@ describe("button", function () {
     it('should use the disabled attribute', function () {
         var d = testutils.compileInPage('<button id="mysel" ng-click="flag = true" ng-disabled="disabled">Test</button>');
         var page = d.page;
-        var input = d.element;
+        var input = d.element.find("button");
         var scope = input.scope();
         var parentDiv = input.parent();
         scope.disabled = false;

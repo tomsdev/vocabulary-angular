@@ -15,12 +15,13 @@ If you are interested in how to build mobile web apps with this adapter, have a 
 
 Dependencies
 ----------------
-- angular 1.0.1
+- angular 1.0.3
 - jquery 1.7.1
-- jquery mobile 1.1.1 Final
+- jquery mobile 1.2.0 Final
 
 Examples
 ------------
+- See the [wiki page](wiki/Projects-using-the-adapter)
 - [Todo mobile](http://jsfiddle.net/tigbro/Du2DY/): JsFiddle
 - [Todo mobile](https://github.com/tigbro/todo-mobile): Single source app for jquery-mobile and sencha touch:
 - [Rent Your Legacy Car](https://github.com/mjswa/rylc-html5): A more complex example from the german book [Mobile Web-Apps mit JavaScript](http://www.opitz-consulting.com/go_javascriptbuch).
@@ -44,10 +45,10 @@ Include this adapter _after_ angular and jquery mobile (see below).
     <html ng-app>
     <head>
         <title>MobileToys</title>
-        <link rel="stylesheet" href="lib/jquery.mobile-1.1.css"/>
-        <script src="lib/jquery-1.7.1.js"></script>
-        <script src="lib/jquery.mobile-1.1.0.js"></script>
-        <script src="lib/angular-1.1.0.js"></script>
+        <link rel="stylesheet" href="lib/jquery.mobile.css"/>
+        <script src="lib/jquery.js"></script>
+        <script src="lib/jquery.mobile.js"></script>
+        <script src="lib/angular.js"></script>
         <script src="lib/jquery-mobile-angular-adapter.js"></script>
     </head>
 
@@ -58,7 +59,7 @@ Create a `index.xhtml` file like the one below:
     <html ng-app>
     <head>
         <title>MobileToys</title>
-        <link rel="stylesheet" href="lib/jquery.mobile-1.1.css"/>
+        <link rel="stylesheet" href="lib/jquery.mobile.css"/>
         <script src="lib/requirejs.js" data-main="main.js"/>
     </head>
     <body>
@@ -136,33 +137,87 @@ Running the tests
   The ui-tests can be run via the url `localhost:8080/jqmng/UiSpecRunner.html`
 
 
-Jqm hashchange handling, `$location` service and routes
+Navigation and routes
 ---------------------
 
-By default, jqm listens for all hash changes and shows the the page with the id of the current location hash.
-Also, if you navigate programmatically to a new page (e.g. by the `$navigate` service), the hash is also adjusted.
-This mode of url handling is called jqm compatibility mode in the adapter. It is enabled by default.
-Please note that this is different to both, the hashbang and the html5 mode of angular. For this to work,
-the adapter replaces the default `$location` service of angular with new one that directly maps `window.location`
-to `$location`. This mode is not useful together with angular routes.
+The adapter integrates angular routes with jquery mobile in the following way:
+
+- If no route is defined, the default jquery mobile url handling applies:
+    * Navigation to a hash shows the page whose id is the same as the hash, e.g.
+    `<a href="#somePage">`.
+    * Navigation to a normal page loads that page using ajax and
+    then navigates to that page, e.g. `<a href="somePage.html">`
+- You can set the special property `jqmOptions` on routes, e.g.
+
+        $routeProvider.when('/somePage', {
+            templateUrl:'someTemplate.html',
+            jqmOptions: { transition: 'flip' }
+        });
+
+    Those properties are directly passed to `$.mobile.changePage`. For a documentation of the available options
+    have a look at the jquery mobile documentation.
+- You can set the special property `onActivate` in routes. If this is set,
+  it will be evaluated in the scope of the page to which the route navigates to,
+  before the `pagebeforeshow` event.
+
+  This expression can also use the properties from `$route.current.locals`, which are calculates by the `resolve` entry
+  of the route. E.g.
+
+        $routeProvider.when('/somePage', {
+            templateUrl:'someTemplate.html',
+            onActivate: 'someFn(someParam)',
+            resolve: {someParam: function() { return 'hello'; }}
+        });
+
+        function SomePageController($scope) {
+           $scope.someFn = function(someParam) {
+              expect(someParam).toBe('hello');
+           }
+        }
+
+- Please also look at the extensions to the `$location` service for controlling history and changing route params for just one route call.
+
+Default routing: `basePath+$location.url()`
+
+* E.g. for a page `/somePath/somePage.html` and `location.url()=='/page1'` this results in `/somePath/page1`.
+* To be compatible to plain jquery mobile the adapter creates a default routing for all urls that are not
+  mapped by other routes.
+* If a document contains the link `<a href="somePage">` and the user clicks on that link, angular updates `$location.url`
+  to `/somePage`. However, in plain jquery mobile, this should load the page `/somePath/somePage`. This is why
+  we append the `basePath` to the `$location.url()`.
 
 
-However, you can also turn the jqm compatibility mode off. Then, jquery mobile will neither listen to hash changes
-nor will it update the hash when pages are changed programmatically (e.g. by the `$navigate` service). This is useful
-if you want to manually control the urls in angular. For this, there is the function `jqmCompatMode(bool)` in the
-`$locationProvider`. Here is an example for turning jqm compatibility mode off:
+Notes:
 
-    module.config(function($locationProvider) { $locationProvider.jqmCompatMode(false); });
+- Internally, we use jquery mobile to load the pages and do the transition between the pages.
+  By this, we automatically support the prefetching and caching functionality for pages from jquery mobile (see their docs for details).
+  E.g. use `<a href="prefetchThisPage.html" data-prefetch> ... </a>` in a parent page to prefetch a child page.
+- We always enable `$locationProvider.html5Mode` and set `$locationProvider.hashPrefix('!')`.
+  By this, we are compatible to the default jquery mobile behaviour,
+  e.g. links like `<a href="somePage.html">` are possible and do not reload the whole page but use AJAX.
+- If you want to start an app directly on a subpage, use the following url:
+  * For an external page that should be loaded using ajax: `index.html#!/somePage.html`
+  * For an internal page that is also contained in the `index.html: `index.html#/!index.html#someOtherPage` (yes, this url contains
+    2 hashes). If you are sure that all browsers that you use support the new history API, you can also use the url
+    `index.html#someOtherPage` to start at an internal page.
+- jQuery mobile automatically creates a `<base>` tag for the main page and sets it's href-attribute to the main page.
+  There are some parts of angular that use this fact, so keep it in mind when debugging errors.
 
-_Please note_: In this mode, routes from angular still cannot be used. Routes work together with the `ng-view` directive.
-And that directive will inject a loaded page into it's body. However, jquery mobile requires all pages to be loaded directly
-under the body element of the page. So, the problem with using routes is now how `ng-view` works. The feature request #59
-addresses this issue by requesting new directives.
 
-A replacement for using routes to load external pages is using `$navigate` with an external url, e.g. `$navigate('somePage.html')`.
-This will load `somePage.html` using ajax and show it afterwards using jquery mobile navigation. Note that the caching
-can be configured, see here: [http://jquerymobile.com/demos/1.1.1/docs/pages/page-cache.html](http://jquerymobile.com/demos/1.1.1/docs/pages/page-cache.html). Note that this approach also allows to specify navigate properties, like the transition animation to use, ...
-See `$navigate` for details.
+Restrictions:
+
+- controllers on routes are not supported. Please use `ng-controller` within the page to be loaded for this
+  or the `onActivate` function on routes.
+  The reasoning behind this is that some pages of jquery mobile are local pages in the same document as the main page
+  and others are loaded using ajax. However, the pages in the same document are compiled at the same time the main page is compiled.
+  Furthermore, by supporting the page cache of jquery mobile assigning a controller would also not be possible.
+  To pass data via routes just let your controllers examine the current route using the `$route` and `$routeParams` service.
+- Routes with a `templateUrl` must point to a full jquery mobile page. Loading parts of jquery mobile pages is not supported.
+- The `ngView` directive cannot be used as jqm pages need to be inserted at a special place in the DOM.
+  However, the adapter takes care of the normal `ngView` handling and inserts the pages at the right place.
+- There needs to be an initial page in the main document of the application. I.e. a `<div data-role="page">` within
+  that html file that also includes angular and jqm. All other pages can then be included using routes with
+  a `templateUrl` property.
 
 
 Scopes
@@ -189,24 +244,17 @@ If the controller is used on more than one page, the instance of the controller 
 Note that the shared controller have the full scope functionality, e.g. for dependecy injection
 or using `$watch`.
 
-### Event-Directives
+### Event-Directives of jQuery Mobile
 
-The following event directives are supported:
+The following event directives are supported (see [http://jquerymobile.com/demos/1.2.0/docs/api/events.html](http://jquerymobile.com/demos/1.2.0/docs/api/events.html)):
 
-- `ngm-click`
-- `ngm-tap`
-- `ngm-taphold`
-- `ngm-swipe`
-- `ngm-swiperight`
-- `ngm-swipeleft`
-- `ngm-pagebeforeshow`
-- `ngm-pagebeforehide`
-- `ngm-pageshow`
-- `ngm-pagehide`
+- `ngm-tap`,`taphold`,
+- `ngm-swipe`,`ngm-swiperight`,`ngm-swipeleft`,
+- `ngm-vmouseover`,`ngm-vmouseout`,`ngm-vmousedown`,`ngm-vmousemove`,`ngm-vmouseup`,`ngm-vclick`,`ngm-vmousecancel`,
+- `ngm-orientationchange`,
+- `ngm-scrollstart`,`ngm-scrollend`,
+- `ngm-pagebeforeshow`,`ngm-pagebeforehide`,`ngm-pageshow`,`ngm-pagehide`
 
-
-For the mentioned events there are special directives to simplify the markup. Each of them is equivalent to
-using the `ngm-event` directive with the corresponding event name.
 
 Usage: E.g. `<a href="#" ngm-swipeleft="myFn()">`
 
@@ -218,22 +266,47 @@ does not allow elements between an `ul` and an `li` element.
 
 Usage: E.g. `<div ngm-if="myFlag">asdfasdf</div>`
 
-### Service `$navigate`
+### Service `$history`
 
-Syntax: `$navigate('[transition]:pageId'[,activateFn][,activateFnParam1, ...])`
+Note: This service is for internal purposes only (same level as `$browser`). Please use `$location.backMode()` or `$location.goBack()` instead.
 
-Service to change the given page.
-- The pageId is the pageId of `$.mobile.changePage`, e.g. `#homepage` for navigation within the current page
-  or `somePage.html` for loading another page.
-- If the transition has the special value `back` than the browser will go back in history to
-  the defined page, e.g. `back:#hompage`.
-- The transition may be omitted, e.g. `$navigate('#homepage')`.
-- To go back one page use `$navigate('back')`.
-- If the `activateFn` function is given, it will be called after the navigation on the target page with
-  `activateFnParam1, ...` as arguments. The invocation is done before the `pagebeforeshow` event on the target page.
-- If you want to pass special options to the jquery mobile `changePage` function:
-  Pass in an object to the `$navigate` function instead of a pageId. This object will be forwarded
-  to jqm `changePage`. To define the new pageId, this object needs the additional property `target`.
+Methods and Properties:
+
+* `$history.go(relativeIndex)`: This will directly call `window.history.go(relativeIndex)`.
+* `$history.urlStack`: This contains the list of visited urls
+* `$history.activeIndex`: This defines the currently active index in the `urlStack`
+
+
+### Service `$location` (extensions)
+
+- `$location.routeOverride(someOverride)`: By this, you can override route properties only
+  for the next routing. This is useful e.g. for passing special parameters to the `onActivate` expression. The following
+  properties of routes can be overridden:
+
+     * `jqmOptions`: Options to give to `$.mobile.changePage` of jquery mobile (e.g. `transition`, ...)
+     * `locals`: the resolved functions from the `resolve` hash in a route.
+     * `onActivate`: the expression to evaluate on the target page with the `locals`.
+
+     E.g.
+
+        $location.routeOverride({
+          locals: {someKey: 'someValue'},
+          jqmOptions: {transition: 'pop'}
+        });
+        $location.path('/someRoutePath');
+
+        function SomePageController($scope) {
+           $scope.someActivateFn = function(someKey) {
+              expect(someKey).toBe(someValue);
+           }
+        }
+
+- `$location.backMode()`: This will try to go back in history to the url specified by `$location`. E.g. if the navigation path
+  to the current page is `page1->page2->page3` and we then call `$location.path('page1'); $location.backMode()` this will
+  go two steps back in history.
+  Note that this is in analogy to the already existing angular method `$location.replace`.
+- `location.goBack()`: This will go one step back in history: call `$location.backMode()` and fill the url of `$location` by the last
+  entry in the browser history.
 
 
 ### Service $waitDialog
@@ -248,8 +321,8 @@ The service `$waitDialog` allows the access to the jquery mobile wait dialog. It
    when the user clicks on the wait dialog.
 
 Default messages are:
-- `$.mobile.loadingMessageWithCancel`: for waitForWithCancel
-- `$.mobile.loadingMessage`: for all other cases
+- `$.mobile.loader.prototype.options.textWithCancel`: for waitForWithCancel. This is a new property.
+- `$.mobile.loader.prototype.options.text`: for all other cases, see the jquery mobile docs.
 
 
 ### Filter `paged`: Paging for lists
@@ -279,7 +352,7 @@ For filtering and sorting the paged array, you can use filter chaining with the 
 
 To show a button that loads the next page of the list, use the following syntax:
 
-    <a href="#" ngm-if="pagerId.hasMore" ngm-click="pagerId.loadMore()">Load More</a>
+    <a href="#" ngm-if="pagerId.hasMore" ngm-vclick="pagerId.loadMore()">Load More</a>
 
 - `pagerId` is the id used in the `paged` filter.
 - `pagerId.hasMore` returns a boolean indicating if all pages of the list have been loaded.
@@ -291,7 +364,7 @@ The following example shows an example for a paged list for the data in the vari
     <ul data-role="listview">
         <li ng-repeat="item in list | paged:'pager1'">{{item}}</li>
         <li ngm-if="pager1.hasMore">
-            <a href="#" ngm-click="pager1.loadMore()">Load more</a>
+            <a href="#" ngm-vclick="pager1.loadMore()">Load more</a>
          </li>
     </ul>
 
@@ -305,9 +378,16 @@ Notes on the integration of some jqm widgets
 
 - The attribute `data-collapsed` has bidirectional data binding, e.g.
 
-    <div data-role="collapsible" data-collapsed="someProperty">...</div>
+        <div data-role="collapsible" data-collapsed="someProperty">...</div>
 
+### widget checkboxradio
 
+- using `ng-repeat` with a checkbox or radio button without a wrapper element can be done like the following:
+
+        <label ng-repeat="l in [1,2]">
+            {{l}}
+            <input type="checkbox">
+        </label>
 
 Integration strategy
 ---------------------
@@ -368,3 +448,6 @@ Ohter possibilities not chosen:
   this is very slow, as this would lead to many DOM traversals by the different jqm listeners
   for the "create"-Event.
 
+Integration of jqm routing and angular routing:
+- We chose to use the angular routing, as it is very flexible and programmable, and it is easier to integrate jqm
+  routing with angular routing and the other way around.

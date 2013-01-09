@@ -6,6 +6,11 @@
 vocabularyAngularApp.controller('QuizCtrl', ["$scope", "wordsDataService", function($scope, wordsDataService) {
 	var words = wordsDataService.get();
 
+	$scope.onPageEnter = function() {
+		$scope.quizIndex = 0;
+		$scope.isQuizEnd = false;
+	};
+
 	/**
 	 * Index of the current word in the quiz.
 	 * @type {Number}

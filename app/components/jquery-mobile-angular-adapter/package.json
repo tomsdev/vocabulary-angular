@@ -1,0 +1,10 @@
+{
+    "name":"jquery-mobile-angular-adapter",
+    "version":"1.2.0",
+    "private":true,
+    "dependencies":{
+    },
+    "devDependencies":{
+        "uglify-js":"latest"
+    }
+}

@@ -97,8 +97,8 @@ describe("regression", function () {
         });
     });
 
-    describe('namespace', function() {
-        it("should allow to use a different jquery mobile namespace", function() {
+    describe('namespace', function () {
+        it("should allow to use a different jquery mobile namespace", function () {
             loadHtml('/jqmng/ui/empty-fixture.html', function (frame) {
                 var $ = frame.$;
                 $.mobile.ns = "jqm-";
@@ -114,41 +114,29 @@ describe("regression", function () {
 
     });
 
-  describe('navigation', function() {
-      // Note: This test is the reason for the deferAngularBootstrap handling!
-      it("should navigate correctly when angular is loaded before jqm", function() {
-          var $, win;
-          loadHtml('/jqmng/ui/test-fixture-deferredBootstrap.html#/jqmng/ui/page1.html');
-          runs(function () {
-              win = testframe();
-              $ = win.$;
-              $.mobile.changePage("page2.html");
-          });
-          runs(function() {
-              win.history.back();
-          });
-          waits(1000);
-          runs(function() {
-              expect($.mobile.activePage.attr("id")).toBe("page1");
-          });
-      });
-
-
-      it('should be able to start at a subpage in jqmCompatMode when using the $location service in a main controller', function() {
-          var $, win;
-          loadHtml('/jqmng/ui/test-fixture.html#page2', function(win) {
-              win.$("body").attr("ng-controller", "MainController");
-              win.MainController = function($location) {
-
-              };
-          });
-          runs(function () {
-              win = testframe();
-              $ = win.$;
-              expect($.mobile.activePage.attr("id")).toBe("page2");
-          });
-      });
-
-  });
+    describe('navigation', function () {
+        it("should navigate correctly when angular is loaded before jqm", function () {
+            var $, win;
+            loadHtml('/jqmng/ui/test-fixture-ngBeforeJqm.html#!/page1.html');
+            runs(function () {
+                win = testframe();
+                $ = win.$;
+                var injector = $("body").injector();
+                var $rootScope = injector.get("$rootScope");
+                var $location = injector.get("$location");
+                $location.path("page2.html");
+                $rootScope.$apply();
+            });
+            waitsForAsync();
+            runs(function () {
+                expect($.mobile.activePage.attr("id")).toBe("page2");
+                win.history.back();
+            });
+            waitsForAsync();
+            runs(function () {
+                expect($.mobile.activePage.attr("id")).toBe("page1");
+            });
+        });
+    });
 
 });

@@ -1,5 +1,5 @@
 /**
-* jQuery Mobile angularJS adaper v1.1.1-SNAPSHOT
+* jQuery Mobile angularJS adaper v1.2.0
 * http://github.com/tigbro/jquery-mobile-angular-adapter
 *
 * Copyright 2011, Tobias Bosch (OPITZ CONSULTING GmbH)
@@ -20,6 +20,28 @@ factory(window.jQuery, window.angular);
         }
     }
 
+    // patch for selectmenu when it opens a menu in an own page
+    $( document ).bind( "selectmenubeforecreate", function( event ) {
+        var selectmenuWidget = $( event.target ).data( "selectmenu" );
+        patch(selectmenuWidget, 'close', function (old, self, args) {
+            if (self.options.disabled || !self.isOpen) {
+                return;
+            }
+            if (self.menuType === "page") {
+                // See mobile.dialog#close for the same logic as here!
+                var dst = $.mobile.urlHistory.getPrev().url;
+                if (!$.mobile.path.isPath(dst)) {
+                    dst = $.mobile.path.makeUrlAbsolute("#" + dst);
+                }
+
+                $.mobile.changePage(dst, { changeHash:false, fromHashChange:true });
+                self.isOpen = false;
+            } else {
+                old.apply(self, args);
+            }
+        });
+    });
+
     // selectmenu may create parent elements and extra pages
     patch($.mobile.selectmenu.prototype, 'destroy', function (old, self, args) {
         old.apply(self, args);
@@ -30,6 +52,10 @@ factory(window.jQuery, window.angular);
         screen && screen.remove();
         listbox && listbox.remove();
     });
+
+    // native selectmenu throws an error is no option is contained!
+    $.mobile.selectmenu.prototype.placeholder = "";
+
 
     // Listview may create subpages that need to be removed when the widget is destroyed.
     patch($.mobile.listview.prototype, "destroy", function (old, self, args) {
@@ -73,32 +99,20 @@ factory(window.jQuery, window.angular);
 
     // Patch 1: controlgroup should not exclude invisible children
     // as long as it is not visible itself!
-    // Patch 2: to refresh a controlgroup we call it multiple times.
-    // However, controlgroup then wraps its children multiple times
-    // in nested divs.
-
     patch($.fn, "controlgroup", function (old, self, args) {
-        var _wrapInner = $.fn.wrapInner;
-        if (self.children(".ui-controlgroup-controls").length>0) {
-            $.fn.wrapInner = function() { };
+        if (self.filter(":visible").length === 0) {
+            var options = args[0] || {};
+            options.excludeInvisible = false;
+            return old.call(self, options);
         }
-        try {
-            if (self.filter(":visible").length === 0) {
-                var options = args[0] || {};
-                options.excludeInvisible = false;
-                return old.call(self, options);
-            }
-            return old.apply(self, args);
-        } finally {
-            $.fn.wrapInner = _wrapInner;
-        }
+        return old.apply(self, args);
     });
 
     // collapsible has problems when a collapsible is created with a nested collapsible,
     // if the nested collapsible is created before the outside collapsible.
     var _c = $.fn.collapsible;
     var nestedContentClass = "ui-collapsible-content";
-    $.fn.collapsible = function() {
+    $.fn.collapsible = function () {
         var nestedContent = this.find(".ui-collapsible-content");
         nestedContent.removeClass(nestedContentClass);
         try {
@@ -109,11 +123,35 @@ factory(window.jQuery, window.angular);
     };
 
     // navbar does not contain a refresh function, so we add it here.
-    $.mobile.navbar.prototype.refresh = function() {
-        var $navbar = this.element,
-            $navbtns = $navbar.find( "a" ),
-            iconpos = $navbtns.filter( ":jqmData(icon)" ).length ?
-                this.options.iconpos : undefined;
+
+    patch($.mobile.navbar.prototype, '_create', function (old, self, args) {
+        var _find = $.fn.find;
+        var navbar = self.element;
+        var navbarBtns;
+        $.fn.find = function (selector) {
+            var res = _find.apply(this, arguments);
+            if (selector === 'a') {
+                navbar.data('$navbtns', res);
+            }
+            return res;
+        };
+        try {
+            return old.apply(self, args);
+        } finally {
+            $.fn.find = _find;
+        }
+    });
+
+    $.mobile.navbar.prototype.refresh = function () {
+        var $navbar = this.element;
+
+        var $navbtns = $navbar.data("$navbtns");
+        $navbtns.splice(0, $navbtns.length);
+        $.each($navbar.find("a"), function (key, value) {
+            $navbtns.push(value);
+        });
+        var iconpos = $navbtns.filter(":jqmData(icon)").length ?
+            this.options.iconpos : undefined;
 
         var list = $navbar.find("ul");
         var listEntries = list.children("li");
@@ -123,145 +161,16 @@ factory(window.jQuery, window.angular);
         listEntries.removeClass(function (index, css) {
             return (css.match(/\bui-block-\S+/g) || []).join(' ');
         });
-        list.jqmEnhanceable().grid({ grid: this.options.grid });
+        list.jqmEnhanceable().grid({ grid:this.options.grid });
 
         $navbtns.buttonMarkup({
-            corners:	false,
-            shadow:		false,
-            inline:     true,
-            iconpos:	iconpos
+            corners:false,
+            shadow:false,
+            inline:true,
+            iconpos:iconpos
         });
     };
-
-})($);
-/**
- * This will delay the angular initialization by two nested calls to jQuery.fn.ready.
- * By this, angular initialization will always be the last that is called by jQuery.fn.ready.
- * This is needed so that other libs (especially jqm), who also rely on jQuery.fn.ready for initialization, have
- * the chance to initialize before angular, no matter in which order the libs are included in the dom.
- * <p>
- * Concrete problem: See ui/integration/regressionSpec#navigation
- * <p>
- * Details: This is a copy of the scan for ng-app, ... attributes of angular. This will also remove
- * those attributes from the dom, so angular does not get to see them.
- */
-(function ($, angular) {
-    var forEach = angular.forEach;
-    function deferAngularBootstrap(element, bootstrap) {
-        $.holdReady(true);
-        var doc = element.nodeType === 9 ? element : element.ownerDocument;
-        addReadyListener(doc, function () {
-            var config = findAndRemoveAngularConfig(element);
-            if (config) {
-                $(function () {
-                    bootstrap(config.appElement, config.module);
-                })
-            }
-            $.holdReady(false);
-        });
-    }
-
-    function findAndRemoveAngularConfig(element) {
-        var elements = [element],
-            appElement,
-            module,
-            names = ['ng:app', 'ng-app', 'x-ng-app', 'data-ng-app'],
-            NG_APP_CLASS_REGEXP = /\sng[:\-]app(:\s*([\w\d_]+);?)?\s/;
-
-        function append(element) {
-            element && elements.push(element);
-        }
-
-        forEach(names, function (name) {
-            names[name] = true;
-            append(document.getElementById(name));
-            name = name.replace(':', '\\:');
-            if (element.querySelectorAll) {
-                forEach(element.querySelectorAll('.' + name), append);
-                forEach(element.querySelectorAll('.' + name + '\\:'), append);
-                forEach(element.querySelectorAll('[' + name + ']'), append);
-            }
-        });
-
-        forEach(elements, function (element) {
-            if (!appElement) {
-                if (element.getAttribute) {
-                    var id = element.getAttribute("id");
-                    forEach(names, function (name) {
-                        if (id === name) {
-                            element.removeAttribute("id");
-                        }
-                    });
-                }
-                if (element.className) {
-                    var newClassAttr = element.className.replace(/[^;]+;?/g, function (classPart) {
-                        var className = ' ' + classPart + ' ';
-                        var match = NG_APP_CLASS_REGEXP.exec(className);
-                        if (match) {
-                            appElement = element;
-                            module = (match[2] || '').replace(/\s+/g, ',');
-                            return '';
-                        }
-                        return classPart;
-                    });
-                    if (!newClassAttr) {
-                        element.removeAttribute("class");
-                    } else {
-                        element.className = newClassAttr;
-                    }
-                }
-                var attrs = [];
-                forEach(element.attributes, function (attr) {
-                    if (!appElement && names[attr.name]) {
-                        appElement = element;
-                        module = attr.value;
-                        attrs.push(attr);
-                    }
-                });
-                forEach(attrs, function (attr) {
-                    element.removeAttributeNode(attr);
-                });
-            }
-        });
-        if (appElement) {
-            return {
-                appElement:appElement,
-                module:module ? [module] : []
-            }
-        } else {
-            return undefined;
-        }
-    }
-
-    // See jQuery.bindReady
-    function addReadyListener(document, fn) {
-        var executed = false;
-
-        function callOnce() {
-            if (!executed) {
-                executed = true;
-                fn();
-            }
-        }
-
-        // Catch cases where $(document).ready() is called after the
-        // browser event has already occurred.
-        if (document.readyState === "complete") {
-            callOnce();
-        } else {
-            document.addEventListener("DOMContentLoaded", callOnce, false);
-
-            // A fallback to window.onload, that will always work
-            window.addEventListener("load", callOnce, false);
-        }
-    }
-
-    deferAngularBootstrap(document, angular.bootstrap);
-
-    // expose for tests
-    $.mobile.deferAngularBootstrap = deferAngularBootstrap;
-})($, angular);
-
+})(window.jQuery);
 /**
  * Helper that introduces the concept of precompilation: Preprocess the dom before
  * angular processes it.
@@ -384,7 +293,6 @@ factory(window.jQuery, window.angular);
                 }
                 return _apply.apply(this, arguments);
             };
-            var refreshing = false;
             var _digest = $rootScope.$digest;
             $rootScope.$digest = function () {
                 if ($rootScope.$$phase) {
@@ -399,13 +307,6 @@ factory(window.jQuery, window.angular);
 (function ($, angular) {
     // Only digest the $.mobile.activePage when rootScope.$digest is called.
     var ng = angular.module('ng');
-    $('div').live('pagebeforeshow', function (event, data) {
-        var page = $(event.target);
-        var currPageScope = page.scope();
-        if (currPageScope) {
-            currPageScope.$root.$digest();
-        }
-    });
 
     $.mobile.autoInitializePage = false;
     var lastCreatedPages = [];
@@ -441,7 +342,15 @@ factory(window.jQuery, window.angular);
                     }
                     if (hasPages && !jqmInitialized) {
                         jqmInitialized = true;
-                        $.mobile.initializePage();
+                        var _changePage = $.mobile.changePage;
+                        $.mobile.changePage = function () {};
+                        //$.mobile.changePage.defaults = _changePage.defaults;
+                        try {
+                            $.mobile.initializePage();
+                        } finally {
+                            $.mobile.changePage = _changePage;
+                        }
+                        $rootScope.$broadcast("jqmInit");
                     }
                 }
 
@@ -531,10 +440,19 @@ factory(window.jQuery, window.angular);
                 tElement.removeAttr("ngm-page");
                 return {
                     pre:function (scope, iElement, iAttrs) {
+                        if (!$.mobile.pageContainer) {
+                            $.mobile.pageContainer = iElement.parent().addClass("ui-mobile-viewport");
+                        }
+
                         // Create the page widget without the pagecreate-Event.
                         // This does no dom transformation, so it's safe to call this in the prelink function.
                         createPagesWithoutPageCreateEvent(iElement);
                         lastCreatedPages.push(scope);
+                        iElement.bind('pagebeforeshow', function (event) {
+                            var page = $(event.target);
+                            scope.$emit("jqmPagebeforeshow", page);
+                            scope.$root.$digest();
+                        });
                     }
                 };
             }
@@ -688,6 +606,8 @@ factory(window.jQuery, window.angular);
             precompile:checkboxRadioPrecompile,
             create:checkboxRadioCreate
         },
+        // Button wraps itself into a new element.
+        // Angular does not like this, so we do it in advance.
         button:{
             handlers:[disabledHandler],
             precompile:buttonPrecompile,
@@ -699,11 +619,11 @@ factory(window.jQuery, window.angular);
         textinput:{
             handlers:[disabledHandler],
             precompile:textinputPrecompile,
-            create:textinputCreate
+            create:unwrapFromDivCreate
         },
         slider:{
             handlers:[disabledHandler, refreshAfterNgModelRender],
-            precompile:sliderPrecompile,
+            precompile:wrapIntoDivPrecompile,
             create:sliderCreate
         },
         listview:{
@@ -712,10 +632,12 @@ factory(window.jQuery, window.angular);
         collapsibleset:{
             handlers:[refreshOnChildrenChange]
         },
+        // selectmenu wraps itself into a button and an outer div.
+        // Angular does not like this, so we do it in advance.
         selectmenu:{
             handlers:[disabledHandler, refreshAfterNgModelRender, refreshOnChildrenChange],
-            precompile:selectmenuPrecompile,
-            create:selectmenuCreate
+            precompile:wrapIntoDivPrecompile,
+            create:unwrapFromDivCreate
         },
         controlgroup:{
             handlers:[refreshControlgroupOnChildrenChange]
@@ -724,9 +646,14 @@ factory(window.jQuery, window.angular);
             handlers:[refreshOnChildrenChange]
         },
         dialog:{
-            handlers:[]
+            handlers:[],
+            precompile:dialogPrecompile,
+            create:dialogCreate
         },
         fixedtoolbar:{
+            handlers:[]
+        },
+        popup:{
             handlers:[]
         }
     };
@@ -750,123 +677,70 @@ factory(window.jQuery, window.angular);
     }
 
     // -------------------
-    // precompile functions
-
-    // Checkboxradio wraps the input and label into a new element.
-    // The angular compiler does not like this, as it changes elements that are not
-    // in the subtree of the input element that is currently linked.
-    function checkboxRadioPrecompile(origElement, initArgs) {
-        // Selectors: See the checkboxradio-Plugin in jqm.
-        var parentLabel = $(origElement).closest("label");
-        var container = $(origElement).closest("form,fieldset,:jqmData(role='page'),:jqmData(role='dialog')");
-        if (container.length===0) {
-            container = origElement.parent();
-        }
-        var label = parentLabel.length ? parentLabel : container.find("label").filter("[for='" + origElement[0].id + "']");
-        var wrapper = $("<div></div>").insertBefore(origElement).append(origElement).append(label);
-        moveCloningDirectives(origElement, origElement.parent());
-        return wrapper;
-    }
-
-    function checkboxRadioCreate(origCreate, element, initArgs) {
-        var _wrapAll = $.fn.wrapAll;
-        var input = element.children("input");
-        var wrapper = element;
-        $.fn.wrapAll = function (container) {
-            if (this[0] === input[0]) {
-                $.fn.wrapAll = _wrapAll;
-                var tempContainer = $(container);
-                wrapper[0].className = tempContainer[0].className;
-                return input;
-            }
-            return _wrapAll.apply(this, arguments);
-        };
-        var res = origCreate.apply(input, initArgs);
-        $.fn.wrapAll = _wrapAll;
-        return res;
-    }
+    // precompile and create functions
 
     // Slider appends a new element after the input/select element for which it was created.
     // The angular compiler does not like this, so we wrap the two elements into a new parent node.
-    function sliderPrecompile(origElement, initArgs) {
-        origElement.wrapAll("<div></div>");
-        var wrapper = origElement.parent();
-        moveCloningDirectives(origElement, wrapper);
-        return wrapper;
-    }
-
     function sliderCreate(origCreate, element, initArgs) {
         var slider = element.children().eq(0);
         origCreate.apply(slider, initArgs);
     }
 
-    // Button wraps itself into a new element.
-    // Angular does not like this, so we do it in advance.
+    // Checkboxradio requires a label for every checkbox input and wraps itself as well as the label
+    // into that div. Angular does not like those changes in the DOM, so we do it in advance.
+    function checkboxRadioPrecompile(origElement, initArgs) {
+        // See the checkboxradio-Plugin in jqm for the selectors used to locate the label.
+        var parentLabel = $(origElement).closest("label");
+        var container = $(origElement).closest("form,fieldset,:jqmData(role='page'),:jqmData(role='dialog')");
+        if (container.length === 0) {
+            container = origElement.parent();
+        }
+        var label = parentLabel.length ? parentLabel : container.find("label").filter("[for='" + origElement[0].id + "']");
+        if (label.length===0) {
+            origElement.attr("ng-non-bindable", "true");
+        } else {
+            var wrapper = wrapIntoDivPrecompile(label);
+            moveCloningDirectives(origElement, wrapper);
+            wrapper.append(origElement);
+            return wrapper;
+        }
+    }
+
+    function checkboxRadioCreate(origCreate, element, initArgs) {
+        // wrap the input into it's label. By this, the jqm widget will always
+        // use this label, even if there are other labels with the same id on the same page.
+        // This is important if we use ng-repeat on checkboxes, as this could
+        // create multiple checkboxes with the same id!
+        var label = element.children("label");
+        var input = element.children("input");
+        label.append(input);
+        return unwrapFromDivCreate(function() {
+            return origCreate.apply(input, arguments);
+        }, element, initArgs);
+    }
+
     function buttonPrecompile(origElement, initArgs) {
-        var wrapper = $("<div></div>")
-            .text(origElement.text() || origElement.val())
-            .insertBefore(origElement)
-            .append(origElement);
-        moveCloningDirectives(origElement, wrapper);
+        var wrapper = wrapIntoDivPrecompile(origElement);
+        // Add a text node with the value content,
+        // so that angular bindings work for the value too
+
+        if (origElement[0].nodeName === 'INPUT') {
+            var value = origElement.val();
+            origElement.append(document.createTextNode(value));
+        }
         return wrapper;
     }
 
     function buttonCreate(origCreate, element, initArgs) {
-        var wrapper = element;
+        // Button destroys the text node and recreates a new one. This does not work
+        // if the text node contains angular expressions, so we move the
+        // text node to the right place.
         var button = element.children().eq(0);
-
-        var _text = $.fn.text;
-        $.fn.text = function () {
-            if (arguments.length > 0) {
-                // Only catch the first setter call
-                $.fn.text = _text;
-                return wrapper;
-            }
-            return _text.apply(this, arguments);
-        };
-
-        var _insertBefore = $.fn.insertBefore;
-        $.fn.insertBefore = function (element) {
-            if (this[0] === wrapper[0] && element[0] === button[0]) {
-                return wrapper;
-            }
-            return _insertBefore.apply(this, arguments);
-        };
-
-        var res = origCreate.apply(button, initArgs);
-
-        $.fn.text = _text;
-        $.fn.insertBefore = _insertBefore;
-        return res;
-    }
-
-    // selectmenu wraps itself into a new element.
-    // Angular does not like this, so we do it in advance.
-    function selectmenuPrecompile(origElement, initArgs) {
-        var wrapper = $("<div></div>").insertBefore(origElement).append(origElement);
-        moveCloningDirectives(origElement, wrapper);
-        return wrapper;
-    }
-
-    function selectmenuCreate(origCreate, element, initArgs) {
-        var wrapper = element;
-        var select = element.children().eq(0);
-
-        var _wrap = $.fn.wrap;
-        $.fn.wrap = function (container) {
-            if (this[0] === select[0]) {
-                $.fn.wrap = _wrap;
-                var tempContainer = $(container);
-                wrapper[0].className = tempContainer[0].className;
-
-                return select;
-            }
-            return _wrap.apply(this, arguments);
-        };
-
-        var res = origCreate.apply(select, initArgs);
-
-        $.fn.wrap = _wrap;
+        var textNode = button.contents();
+        var res = unwrapFromDivCreate(origCreate, element, initArgs);
+        var textSpan = element.find(".ui-btn-text");
+        textSpan.empty();
+        textSpan.append(textNode);
         return res;
     }
 
@@ -875,35 +749,161 @@ factory(window.jQuery, window.angular);
         if (!origElement.is("[type='search'],:jqmData(type='search')")) {
             return origElement;
         }
-        var wrapper = $("<div></div>").insertBefore(origElement).append(origElement);
+        return wrapIntoDivPrecompile(origElement);
+    }
+
+    function wrapIntoDivPrecompile(origElement) {
+        origElement.wrapAll("<div></div>");
+        var wrapper = origElement.parent();
         moveCloningDirectives(origElement, wrapper);
         return wrapper;
     }
 
-    function textinputCreate(origCreate, element, initArgs) {
-        if (element[0].nodeName.toUpperCase()!=="DIV") {
-            // no wrapper
+    function unwrapFromDivCreate(origCreate, element, initArgs) {
+        if (element[0].nodeName.toUpperCase() !== "DIV") {
+            // no wrapper existing.
             return origCreate.apply(element, initArgs);
         }
-        var wrapper = element;
-        var input = element.children().eq(0);
 
-        var _wrap = $.fn.wrap;
-        $.fn.wrap = function (container) {
-            if (this[0] === input[0]) {
-                $.fn.wrap = _wrap;
-                var tempContainer = $(container);
-                wrapper[0].className = tempContainer[0].className;
+        if (isMock(origCreate)) {
+            // spy that does not call through
+            return origCreate.apply(element, initArgs);
+        }
 
-                return input;
+        var child = element.children().eq(0);
+        child.insertBefore(element);
+        element.empty();
+        return useExistingElementsForNewElements(element, function () {
+            return origCreate.apply(child, initArgs);
+        });
+    }
+
+    // Dialog: separate event binding and dom enhancement.
+    // Note: We do need to add the close button during precompile,
+    // as the enhancement for the dialog header depends on it (calculation which button is left, right, ...)
+    // We cannot adjust the timing of the header enhancement as it is no jqm widget.
+    function dialogPrecompile(origElement, initAttrs) {
+        var options = $.mobile.dialog.prototype.options;
+        var headerCloseButton = $("<a href='#' data-" + $.mobile.ns + "icon='delete' data-" + $.mobile.ns + "iconpos='notext'>" + options.closeBtnText + "</a>");
+        origElement.find(":jqmData(role='header')").prepend(headerCloseButton);
+        origElement.data('headerCloseButton', headerCloseButton);
+        return origElement;
+    }
+
+    function dialogCreate(origCreate, element, initArgs) {
+        if (isMock(origCreate)) {
+            // During unit tests...
+            return origCreate.apply(element, initArgs);
+        }
+        var headerCloseButton = element.data('headerCloseButton');
+        return useExistingElementsForNewElements(headerCloseButton, function () {
+            return origCreate.apply(element, initArgs);
+        });
+    }
+
+    function isMock(origCreate) {
+        return origCreate.isSpy && origCreate.originalValue !== origCreate.plan;
+    }
+
+    function useExistingElementsForNewElements(existingElements, callback) {
+        var i, el, tagName;
+        var existingElementsHashByElementName = {};
+        for (i = 0; i < existingElements.length; i++) {
+            el = existingElements.eq(i);
+            // Do not use jQuery.fn.remove as this will fire a destroy event,
+            // which leads to unwanted side effects by it's listeners.
+            el[0].parentNode.removeChild(el[0]);
+            tagName = el[0].nodeName.toUpperCase();
+            existingElementsHashByElementName[tagName] = el;
+        }
+
+        function useExistingElementIfPossible(selector) {
+            if (selector) {
+                var template = $(selector);
+                var tagName = template[0].nodeName.toUpperCase();
+                var existingElement = existingElementsHashByElementName[tagName];
+                if (existingElement) {
+                    delete existingElementsHashByElementName[tagName];
+                    existingElement[0].className += ' ' + template[0].className;
+                    return existingElement;
+                }
             }
-            return _wrap.apply(this, arguments);
-        };
+            return false;
+        }
 
-        var res = origCreate.apply(input, initArgs);
-
-        $.fn.wrap = _wrap;
+        var res = withPatches($.fn, {
+            init:function (_init, self, args) {
+                var selector = args[0];
+                if (typeof selector === "string" && selector.charAt(0) === '<') {
+                    var existingElement = useExistingElementIfPossible(selector);
+                    if (existingElement) {
+                        return existingElement;
+                    }
+                }
+                return _init.apply(self, args);
+            },
+            wrap:function (_wrap, self, args) {
+                var selector = args[0];
+                var wrapper = useExistingElementIfPossible(selector);
+                if (wrapper) {
+                    wrapper.insertBefore(self);
+                    wrapper.append(self);
+                    return self;
+                }
+                return _wrap.apply(self, args);
+            },
+            wrapAll:function (_wrapAll, self, args) {
+                var selector = args[0];
+                var wrapper = useExistingElementIfPossible(selector);
+                if (wrapper) {
+                    wrapper.insertBefore(self);
+                    wrapper.append(self);
+                    return self;
+                }
+                return _wrapAll.apply(self, args);
+            }
+        }, callback);
+        for (tagName in existingElementsHashByElementName) {
+            throw new Error("existing element with tagName " + tagName + " was not used!");
+        }
         return res;
+    }
+
+    function withPatches(obj, patches, callback) {
+        var _old = {};
+        var executingCount = 0;
+
+        function patchProp(prop) {
+            var oldFn = _old[prop] = obj[prop];
+            oldFn.restore = function () {
+                obj[prop] = oldFn;
+                delete oldFn.restore;
+            };
+            obj[prop] = function () {
+                if (executingCount) {
+                    return oldFn.apply(this, arguments);
+                }
+                executingCount++;
+                try {
+                    return patches[prop](oldFn, this, arguments);
+                } finally {
+                    executingCount--;
+                }
+            };
+            obj[prop].prototype = oldFn.prototype;
+        }
+
+        var prop;
+        for (prop in patches) {
+            patchProp(prop);
+        }
+        try {
+            return callback();
+        } finally {
+            for (prop in _old) {
+                _old[prop].restore && _old[prop].restore();
+            }
+        }
     }
 
     var CLONING_DIRECTIVE_REGEXP = /(^|[\W])(repeat|switch-when|if)($|[\W])/;
@@ -967,24 +967,25 @@ factory(window.jQuery, window.angular);
         if (iAttrs.collapsed) {
             var collapsedGetter = $parse(iAttrs.collapsed);
             var collapsedSetter = collapsedGetter.assign;
-            scope.$watch(collapsedGetter, function(value) {
+            scope.$watch(collapsedGetter, function (value) {
                 if (value) {
                     iElement.trigger("collapse");
                 } else {
                     iElement.trigger("expand");
                 }
             });
-
-            iElement.bind("collapse", function () {
-                scope.$apply(function() {
-                    collapsedSetter(scope, true);
+            if (collapsedSetter) {
+                iElement.bind("collapse", function () {
+                    scope.$apply(function () {
+                        collapsedSetter(scope, true);
+                    });
                 });
-            });
-            iElement.bind("expand", function () {
-                scope.$apply(function() {
-                    collapsedSetter(scope, false);
+                iElement.bind("expand", function () {
+                    scope.$apply(function () {
+                        collapsedSetter(scope, false);
+                    });
                 });
-            });
+            }
         }
     }
 
@@ -1044,284 +1045,533 @@ factory(window.jQuery, window.angular);
     }
 
 
-})(angular, $);
+})
+    (angular, $);
 /**
- * This is an extension to the locationProvider of angular and provides a new mode: jqmCompat-mode.
- * <p>
- * This mode allows to use the normal jquery mobile hash handling (hash = page id).
- * For this to work, it maps window.location directly to $location, without hashbang or html5 mode.
- * Furthermore, this mode extends the $browser so that it reuses the hashchange handler of
- * jqm and ensures, that angular's handler is always called before the one from jqm.
- * By this, $location is always up to date when jquery mobile fires pagebeforecreate, ...
- * Note: In this mode, angular routes are not useful.
- * <p>
- * If this mode is turned off, the hash listening and chaning of jqm is completely deactivated.
- * Then you are able to use angular's routes for navigation and `$navigate` service for jqm page navigation.
- * <p>
- * Configuration: $locationProvider.jqmCompatMode(bool). Default is `true`.
- * <p>
- * Note: Much of the code below is copied from angular, as it is contained in an internal angular function scope.
+ * This combines the routing of angular and jquery mobile. In detail, it deactivates the routing in jqm
+ * and reuses that of angular.
  */
 (function (angular, $) {
-    var URL_MATCH = /^([^:]+):\/\/(\w+:{0,1}\w*@)?([\w\.-]*)(:([0-9]+))?(\/[^\?#]*)?(\?([^#]*))?(#(.*))?$/,
-        PATH_MATCH = /^([^\?#]*)?(\?([^#]*))?(#(.*))?$/,
-        DEFAULT_PORTS = {'http':80, 'https':443, 'ftp':21};
+    var mod = angular.module("ng");
 
-
-    /**
-     * Parses an escaped url query string into key-value pairs.
-     * @returns Object.<(string|boolean)>
-     */
-    function parseKeyValue(/**string*/keyValue) {
-        var obj = {}, key_value, key;
-        angular.forEach((keyValue || "").split('&'), function (keyValue) {
-            if (keyValue) {
-                key_value = keyValue.split('=');
-                key = decodeURIComponent(key_value[0]);
-                obj[key] = angular.isDefined(key_value[1]) ? decodeURIComponent(key_value[1]) : true;
-            }
-        });
-        return obj;
-    }
-
-    /**
-     * This method is intended for encoding *key* or *value* parts of query component. We need a custom
-     * method becuase encodeURIComponent is too agressive and encodes stuff that doesn't have to be
-     * encoded per http://tools.ietf.org/html/rfc3986:
-     *    query       = *( pchar / "/" / "?" )
-     *    pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
-     *    unreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~"
-     *    pct-encoded   = "%" HEXDIG HEXDIG
-     *    sub-delims    = "!" / "$" / "&" / "'" / "(" / ")"
-     *                     / "*" / "+" / "," / ";" / "="
-     */
-    function encodeUriQuery(val, pctEncodeSpaces) {
-        return encodeURIComponent(val).
-            replace(/%40/gi, '@').
-            replace(/%3A/gi, ':').
-            replace(/%24/g, '$').
-            replace(/%2C/gi, ',').
-            replace((pctEncodeSpaces ? null : /%20/g), '+');
-    }
-
-    /**
-     * Encode path using encodeUriSegment, ignoring forward slashes
-     *
-     * @param {string} path Path to encode
-     * @returns {string}
-     */
-    function encodePath(path) {
-        var segments = path.split('/'),
-            i = segments.length;
-
-        while (i--) {
-            segments[i] = encodeUriSegment(segments[i]);
-        }
-
-        return segments.join('/');
-    }
-
-    /**
-     * We need our custom mehtod because encodeURIComponent is too agressive and doesn't follow
-     * http://www.ietf.org/rfc/rfc3986.txt with regards to the character set (pchar) allowed in path
-     * segments:
-     *    segment       = *pchar
-     *    pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
-     *    pct-encoded   = "%" HEXDIG HEXDIG
-     *    unreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~"
-     *    sub-delims    = "!" / "$" / "&" / "'" / "(" / ")"
-     *                     / "*" / "+" / "," / ";" / "="
-     */
-    function encodeUriSegment(val) {
-        return encodeUriQuery(val, true).
-            replace(/%26/gi, '&').
-            replace(/%3D/gi, '=').
-            replace(/%2B/gi, '+');
-    }
-
-    function toKeyValue(obj) {
-        var parts = [];
-        angular.forEach(obj, function (value, key) {
-            parts.push(encodeUriQuery(key, true) + (value === true ? '' : '=' + encodeUriQuery(value, true)));
-        });
-        return parts.length ? parts.join('&') : '';
-    }
-
-    function int(str) {
-        return parseInt(str, 10);
-    }
-
-    function matchUrl(url, obj) {
-        var match = URL_MATCH.exec(url);
-
-        match = {
-            protocol:match[1],
-            host:match[3],
-            port:int(match[5]) || DEFAULT_PORTS[match[1]] || null,
-            path:match[6] || '/',
-            search:match[8],
-            hash:match[10]
-        };
-
-        if (obj) {
-            obj.$$protocol = match.protocol;
-            obj.$$host = match.host;
-            obj.$$port = match.port;
-        }
-
-        return match;
-    }
-
-
-    function composeProtocolHostPort(protocol, host, port) {
-        return protocol + '://' + host + (port == DEFAULT_PORTS[protocol] ? '' : ':' + port);
-    }
-
-
-    /**
-     * Patches the angular LocationHashbangUrl service to use the url directly.
-     */
-    function patchLocationServiceToUsePlainUrls($location, initUrl) {
-
-        /**
-         * Parse given html5 (regular) url string into properties
-         * @param {string} newAbsoluteUrl HTML5 url
-         * @private
-         */
-        $location.$$parse = function (newAbsoluteUrl) {
-            var match = matchUrl(newAbsoluteUrl, this);
-
-            this.$$path = decodeURIComponent(match.path);
-            this.$$search = parseKeyValue(match.search);
-            this.$$hash = match.hash && decodeURIComponent(match.hash) || '';
-
-            this.$$compose();
-        };
-
-        /**
-         * Compose url and update `absUrl` property
-         * @private
-         */
-        $location.$$compose = function () {
-            var search = toKeyValue(this.$$search),
-                hash = this.$$hash ? '#' + encodePath(this.$$hash) : '';
-
-            this.$$url = encodePath(this.$$path) + (search ? '?' + search : '') + hash;
-            this.$$absUrl = composeProtocolHostPort(this.$$protocol, this.$$host, this.$$port) +
-                this.$$url;
-        };
-
-        $location.$$rewriteAppUrl = function (absoluteLinkUrl) {
-            // deactivate link rewriting
-            return null;
-        };
-
-        $location.$$parse(initUrl);
-    }
-
-    /**
-     * This reuses the hashchange handler of jqm for angular and ensures, that angular's handler
-     * is always called before the one from jqm.
-     * By this, $location is always up to date when jquery mobile fires pagebeforecreate, ...
-     * @param $browser
-     */
-    function reusejQueryMobileHashChangeForAngular($browser) {
-        if ($browser.isMock) {
-            return;
-        }
-        var urlChangeInit = false;
-
-        var _onUrlChange = $browser.onUrlChange;
-        var triggerAngularHashChange;
-        $browser.onUrlChange = function (callback) {
-            var res;
-            if (!urlChangeInit) {
-                var _bind = $.fn.bind;
-                $.fn.bind = function(event, handler) {
-                    triggerAngularHashChange = handler;
-                };
-                var res = _onUrlChange(callback);
-                $.fn.bind = _bind;
-
-                var _hashChange = $.mobile._handleHashChange;
-                $.mobile._handleHashChange = function(hash) {
-                    triggerAngularHashChange();
-                    _hashChange(hash);
-                };
-                var _setPath = $.mobile.path.set;
-                $.mobile.path.set = function(hash) {
-                    var res = _setPath.apply(this, arguments);
-                    triggerAngularHashChange();
-                    return res;
-                };
-
-                urlChangeInit = true;
-            } else {
-                res = _onUrlChange(callback);
-            }
-            return res;
-        };
-
-    }
-
-    var ng = angular.module("ng");
-    ng.config(['$provide', '$locationProvider', function ($provide, $locationProvider) {
-        $provide.decorator('$browser', ['$sniffer', '$delegate', function ($sniffer, $browser) {
-            if ($locationProvider.jqmCompatMode()) {
-                // Angular should not use the history api and use the hash bang location service,
-                // which we will extend below.
-                $sniffer.history = false;
-                reusejQueryMobileHashChangeForAngular($browser);
-            }
+    function registerBrowserDecorator($provide) {
+        $provide.decorator('$browser', ['$delegate', function ($browser) {
+            // Always return the same base href, as jquery mobile changes
+            // the base tag depending on which pages it is loading!
+            $browser.initialBaseHref = $browser.baseHref();
+            $browser.baseHref = function () {
+                // Patch for baseHref to return the correct path also for file-urls.
+                // See bug https://github.com/angular/angular.js/issues/1690
+                var href = $browser.initialBaseHref;
+                return href ? href.replace(/^file?\:\/\/[^\/]*/, '') : href;
+            };
             return $browser;
         }]);
+
+
+        $provide.decorator('$location', ['$delegate', locationRouteOverrideDecorator]);
+
+        function locationRouteOverrideDecorator($location) {
+            $location.routeOverride = function (routeOverride) {
+                if (arguments.length === 0) {
+                    return $location.$$routeOverride;
+                }
+                $location.$$routeOverride = routeOverride;
+                return this;
+            };
+
+            // If we start the app with a url like
+            // index.html?a=b#!/somePage.html, i.e.
+            // we have a search parameter and load an external subpage,
+            // then angular does not parse the given hashbang url correctly.
+            // Here, we correct the wrong parsing.
+
+            // TODO file a bug report in angular for this!
+            var hash = $location.hash();
+            if (hash && hash.indexOf('!') === 0) {
+                $location.search({});
+                $location.url(hash.substring(1));
+            }
+
+            return $location;
+        }
+    }
+
+    $.mobile._registerBrowserDecorators = $.mobile._registerBrowserDecorators || [];
+    $.mobile._registerBrowserDecorators.push(registerBrowserDecorator);
+
+    mod.config(['$provide', function ($provide) {
+        registerBrowserDecorator($provide);
     }]);
 
-    ng.config(['$locationProvider', function ($locationProvider) {
-        var jqmCompatMode = true;
-        /**
-         * @ngdoc property
-         * @name ng.$locationProvider#jqmCompatMode
-         * @methodOf ng.$locationProvider
-         * @description
-         * @param {string=} mode Use jqm compatibility mode for navigation.
-         * @returns {*} current value if used as getter or itself (chaining) if used as setter
-         */
-        $locationProvider.jqmCompatMode = function (mode) {
-            if (angular.isDefined(mode)) {
-                jqmCompatMode = mode;
-                return this;
-            } else {
-                return jqmCompatMode;
+
+    // This needs to be outside of a angular config callback, as jqm reads this during initialization.
+    function disableJqmHashChange() {
+        $.mobile.pushStateEnabled = false;
+        $.mobile.hashListeningEnabled = false;
+        $.mobile.linkBindingEnabled = false;
+        $.mobile.changePage.defaults.changeHash = false;
+        $.mobile._handleHashChange = function () {
+        };
+    }
+
+    disableJqmHashChange();
+
+    // html5 mode is always required, so we are able to allow links like
+    // <a href="somePage.html"> to load external pages.
+    mod.config(['$locationProvider', function ($locationProvider) {
+        $locationProvider.html5Mode(true);
+        $locationProvider.hashPrefix('!');
+    }]);
+
+    mod.directive('ngView', function () {
+        throw new Error("ngView is not allowed and not needed with the jqm adapter.");
+    });
+
+    var DEFAULT_JQM_PAGE = 'DEFAULT_JQM_PAGE';
+
+    mod.config(['$routeProvider', function ($routeProvider) {
+        var _when = $routeProvider.when;
+        $routeProvider.when = function (path, params) {
+            if (!params.templateUrl && !params.redirectTo) {
+                throw new Error("Only routes with templateUrl or redirectTo are allowed with the jqm adapter!");
             }
+            if (params.controller) {
+                throw new Error("Controllers are not allowed on routes with the jqm adapter. However, you may use the onActivate parameter");
+            }
+            return _when.apply(this, arguments);
         };
 
-        var _$get = $locationProvider.$get;
-        $locationProvider.$get = ['$injector', '$browser', function ($injector, $browser) {
-            if (jqmCompatMode) {
-                // temporary deactivate $browser.url for changing the url,
-                // as the original $location service might call it before we can patch it!
-                var _url = $browser.url;
-                $browser.url = function() { return _url.call(this) };
-                var $location = $injector.invoke(_$get, $locationProvider);
-                $browser.url = _url;
-                patchLocationServiceToUsePlainUrls($location, $browser.url());
-
-                return $location;
-            } else {
-                // deactivate jqm hash listening and changing
-                $.mobile.pushStateEnabled = false;
-                $.mobile.hashListeningEnabled = false;
-                $.mobile.linkBindingEnabled = false;
-                $.mobile.changePage.defaults.changeHash = false;
-
-                return $injector.invoke(_$get, $locationProvider);
-            }
-        }];
-
+        $routeProvider.otherwise({
+            templateUrl:DEFAULT_JQM_PAGE
+        });
     }]);
 
+    function getBasePath(path) {
+        return path.substr(0, path.lastIndexOf('/'));
+    }
+
+    mod.run(['$route', '$rootScope', '$location', '$browser', '$history', function ($route, $rootScope, $location, $browser, $history) {
+        var _dialogUrl = '/' + $.mobile.dialogHashKey;
+
+        $rootScope.$on('$routeChangeStart', onRouteChangeStart);
+        $rootScope.$on('jqmPagebeforeshow', onPagebeforeshow);
+        $rootScope.$on('$routeChangeSuccess', onRouteChangeSuccess);
+        removeDialogUrlWhenLocationHashChanges($rootScope, $location);
+        instrumentPopupCloseToNavigateBackWhenDialogUrlIsSet();
+        instrumentDialogCloseToNavigateBackWhenDialogUrlIsSet();
+
+        // ----------
+
+        function onRouteChangeStart(event, newRoute) {
+            var routeOverride = $location.$$routeOverride;
+            delete $location.$$routeOverride;
+            if (routeOverride) {
+                if (routeOverride.onActivate) {
+                    newRoute.onActivate = routeOverride.onActivate;
+                }
+                newRoute.jqmOptions = newRoute.jqmOptions || {};
+                angular.extend(newRoute.jqmOptions, routeOverride.jqmOptions);
+
+                newRoute.resolve = newRoute.resolve || {};
+                angular.forEach(routeOverride.locals, function (value, key) {
+                    newRoute.resolve[key] = function () {
+                        return value;
+                    };
+                });
+            }
+
+            // Prevent angular from loading the template, as jquery mobile already does this!
+            newRoute.ngmTemplateUrl = newRoute.templateUrl;
+            newRoute.templateUrl = undefined;
+        }
+
+
+        function onPagebeforeshow(event) {
+            var current = $route.current;
+            if (current && current.onActivate) {
+                event.targetScope.$eval(current.onActivate, current.locals);
+            }
+            var isDialog = $.mobile.activePage && $.mobile.activePage.jqmData("role") === "dialog";
+            if (isDialog) {
+                dialogUrl(true);
+            }
+        }
+
+        function onRouteChangeSuccess() {
+            var newRoute = $route.current;
+            var $document = $(document);
+
+            var url = newRoute.ngmTemplateUrl;
+            if (url === DEFAULT_JQM_PAGE) {
+                if (dialogUrl()) {
+                    return;
+                }
+                var url = $location.url();
+                var baseHref = $browser.baseHref();
+                if (url.indexOf('/') === -1) {
+                    url = baseHref + url;
+                } else {
+                    url = getBasePath(baseHref) + url;
+                }
+            }
+            if (!url) {
+                return;
+            }
+            var navConfig = newRoute.jqmOptions = newRoute.jqmOptions || {};
+            if ($history.fromUrlChange) {
+                navConfig.fromHashChange = true;
+            }
+
+            if (!$.mobile.firstPage) {
+                $rootScope.$on("jqmInit", startNavigation);
+            } else {
+                startNavigation();
+            }
+
+            function startNavigation() {
+                $.mobile.changePage(url, navConfig);
+                if ($.mobile.popup.active) {
+                    // Popup are available without loading,
+                    // so we can check them right after calling $.mobile.changePage!
+                    dialogUrl(true);
+                }
+
+            }
+        }
+
+        function removeDialogUrlWhenLocationHashChanges($rootScope, $location) {
+            $rootScope.$on('$locationChangeStart', function() {
+                var hash = $location.hash();
+                if (dialogUrl() && hash) {
+                    $location.url($location.$$urlBeforeDialog);
+                    delete $location.$$urlBeforeDialog;
+                    $location.hash(hash);
+                }
+            });
+        }
+
+        function instrumentPopupCloseToNavigateBackWhenDialogUrlIsSet() {
+            var popupProto = $.mobile.popup.prototype;
+            var _close = popupProto._close;
+            popupProto._close = function () {
+                if (dialogUrl()) {
+                    $rootScope.$apply(function () {
+                        $location.goBack();
+                    });
+                } else {
+                    _close.apply(this, arguments);
+                }
+            };
+        }
+
+        function instrumentDialogCloseToNavigateBackWhenDialogUrlIsSet() {
+            var dialogProto = $.mobile.dialog.prototype;
+            dialogProto.origClose = dialogProto.close;
+            dialogProto.close = function () {
+                if (this._isCloseable) {
+                    this._isCloseable = false;
+                    if (dialogUrl()) {
+                        $rootScope.$apply(function () {
+                            $location.goBack();
+                        });
+                    } else {
+                        this.origClose();
+                    }
+                }
+            };
+        }
+
+        // gets or sets a dialog url.
+        // We use the same behaviour as in jQuery Mobile: dialog urls
+        // are here for allowing users to click "back" to close the dialog,
+        // but prevent him from opening them again via "forward".
+        function dialogUrl() {
+            if (arguments.length === 0) {
+                // getter
+                return $location.path() === _dialogUrl;
+            }
+            // setter
+            $location.$$urlBeforeDialog = $location.url();
+            $location.url(_dialogUrl);
+            $location.replace();
+        }
+    }]);
+
+    function defaultClickHandler(event, iElement, $scope, $location) {
+        // Attention: Do NOT stopPropagation, as otherwise
+        // jquery Mobile will not generate a vclick event!
+        var rel = iElement.jqmData("rel");
+        if (rel === 'back') {
+            event.preventDefault();
+            $scope.$apply(function () {
+                $location.goBack();
+            });
+        } else if (isNoopLink(iElement)) {
+            event.preventDefault();
+        } else {
+            var absHref = iElement.prop('href'),
+                rewrittenUrl = $location.$$rewriteAppUrl(absHref);
+
+            if (absHref && !iElement.attr('target') && rel !== 'external' && rewrittenUrl) {
+                // See original angular default click handler:
+                // update location manually
+                $location.$$parse(rewrittenUrl);
+                event.preventDefault();
+                // hack to work around FF6 bug 684208 when scenario runner clicks on links
+                window.angular['ff-684208-preventDefault'] = true;
+                // Additional handling
+                var override = $location.routeOverride() || {};
+                var jqmOptions = override.jqmOptions = {
+                    link:iElement
+                };
+                if (rel) {
+                    jqmOptions.role = rel;
+                }
+                var trans = iElement.jqmData("transition");
+                if (trans) {
+                    jqmOptions.transition = trans;
+                }
+                var direction = iElement.jqmData("direction");
+                if (direction) {
+                    jqmOptions.reverse = direction === "reverse";
+                }
+                $location.routeOverride(override);
+                $scope.$apply();
+            }
+        }
+    }
+
+    function isNoopLink(element) {
+        var href = element.attr('href');
+        return (href === '#' || !href);
+    }
+
+    (function patchAngularToAllowVclicksOnEmptyAnchorTags() {
+        // Problem 1:
+        // Angular has a directive for links with an empty "href" attribute.
+        // This directive has a click-listener which prevents the default action
+        // and stops the propagation of the event to parent elements.
+        // However, for simulating vclicks in desktop browsers, jQuery Mobile has a click-listener
+        // on the document. As angular stops propagation of the event, jQuery Mobile never
+        // receives it and therefore never fires the vclick event.
+
+        // Problem 2:
+        // Links with a href-Attribute of value "#" are noops in plain jquery mobile apps
+        // (see e.g. the close button of dialogs).
+        // However, angular interprets such links as a normal link and by this updates
+        // the hash of $location-service to be empty.
+
+        // Solution part1: new directive that sets the href-Attribute of all links to "#". By this,
+        // the mentioned angular directive for links with empty href-Attributes does no more apply
+        mod.directive('a', function () {
+            return {
+                restrict:'E',
+                compile:function (element, attr) {
+                    if (isNoopLink(element)) {
+                        attr.$set('href', '#');
+                    }
+                }
+            };
+        });
+
+        // Solution part2: patch the listener for clicks in angular that updates $location to only be executed
+        // when the href-Attribute of a link is not equal to "#". Otherwise still prevent the default action,
+        // so that the browser does not update the browser location directly.
+        // Here we just prevent angular from installing it's default click handler
+        // and create our own.
+        mod.config(['$locationProvider', function ($locationProvider) {
+            var orig$get = $locationProvider.$get;
+            $locationProvider.$get = ['$injector', '$rootElement', '$rootScope', '$browser', function ($injector, $rootElement, $rootScope, $browser) {
+                var $location = preventClickHandlersOnRootElementWhileCalling($rootElement,
+                    function () {
+                        return $injector.invoke(orig$get, $locationProvider);
+                    });
+                // Note: Some of this click handler was copied from the original
+                // default click handler in angular.
+                $rootElement.bind('click', function (event) {
+                    // TODO(vojta): rewrite link when opening in new tab/window (in legacy browser)
+                    // currently we open nice url link and redirect then
+
+                    if (event.ctrlKey || event.metaKey || event.which == 2) return;
+
+                    var elm = $(event.target);
+
+                    // traverse the DOM up to find first A tag
+                    while (angular.lowercase(elm[0].nodeName) !== 'a') {
+                        // ignore rewriting if no A tag (reached root element, or no parent - removed from document)
+                        if (elm[0] === $rootElement[0] || !(elm = elm.parent())[0]) return;
+                    }
+                    defaultClickHandler(event, elm, $rootScope, $location);
+                });
+                return $location;
+            }];
+        }]);
+
+        function preventClickHandlersOnRootElementWhileCalling($rootElement, callback) {
+            var _bind = $.fn.bind;
+            try {
+                $.fn.bind = function (eventName) {
+                    if (eventName === 'click' && this[0] === $rootElement[0]) {
+                        return;
+                    }
+                    return _bind.apply(this, arguments);
+                };
+                return callback();
+            }
+            finally {
+                $.fn.bind = _bind;
+            }
+        }
+    })();
+
+
 })(angular, $);
+(function ($, angular) {
+
+    var mod = angular.module("ng");
+
+    function registerBrowserDecorator($provide) {
+        $provide.decorator('$rootScope', ['$delegate', rootScopeSuppressEventInDigestCycleDecorator]);
+        $provide.decorator('$location', ['$delegate', '$history', locationBackDecorator]);
+        $provide.decorator('$browser', ['$delegate', '$history', '$rootScope', '$injector', browserHistoryDecorator]);
+
+
+        function rootScopeSuppressEventInDigestCycleDecorator($rootScope) {
+            var suppressedEvents = {};
+            $rootScope.suppressEventInDigestCycle = function (eventName) {
+                suppressedEvents[eventName] = true;
+            };
+            var _$broadcast = $rootScope.$broadcast;
+            $rootScope.$broadcast = function (eventName) {
+                if (suppressedEvents[eventName]) {
+                    return {};
+                }
+                return _$broadcast.apply(this, arguments);
+            };
+            var _$digest = $rootScope.$digest;
+            $rootScope.$digest = function () {
+                var res = _$digest.apply(this, arguments);
+                suppressedEvents = {};
+                return res;
+            };
+            return $rootScope;
+        }
+
+        function locationBackDecorator($location, $history) {
+            $location.backMode = function () {
+                $location.$$replace = "back";
+                return this;
+            };
+            $location.goBack = function () {
+                if ($history.activeIndex <= 0) {
+                    throw new Error("There is no page in the history to go back to!");
+                }
+                this.$$parse($history.urlStack[$history.activeIndex - 1]);
+                this.backMode();
+                return this;
+            };
+            return $location;
+        }
+
+        function browserHistoryDecorator($browser, $history, $rootScope, $injector) {
+            var _url = $browser.url;
+            var cachedRouteOverride = null;
+            $browser.url = function (url, replace) {
+                if (url) {
+                    // setter
+                    var res = $history.onUrlChangeProgrammatically(url, replace === true, replace === 'back');
+                    if (res === false) {
+                        // cancel navigation and rely on the callback
+                        // from browser history.
+                        var $location = $injector.get('$location');
+                        cachedRouteOverride = $location.routeOverride();
+                        $location.$$parse(_url.call(this));
+                        // suppress $locationChangeSuccess and $locationChangeStart event in this eval loop,
+                        // so the routes don't get updated!
+                        $rootScope.suppressEventInDigestCycle('$locationChangeStart');
+                        $rootScope.suppressEventInDigestCycle('$locationChangeSuccess');
+                        return;
+                    }
+                }
+                return _url.apply(this, arguments);
+            };
+            var _onUrlChange = $browser.onUrlChange;
+            $browser.onUrlChange(function (newUrl) {
+                if (cachedRouteOverride) {
+                    var $location = $injector.get('$location');
+                    $location.routeOverride(cachedRouteOverride);
+                }
+                $history.onUrlChangeBrowser(newUrl);
+            });
+            return $browser;
+        }
+    }
+
+    $.mobile._registerBrowserDecorators = $.mobile._registerBrowserDecorators || [];
+    $.mobile._registerBrowserDecorators.push(registerBrowserDecorator);
+
+    mod.config(['$provide', function ($provide) {
+        registerBrowserDecorator($provide);
+    }]);
+
+    mod.factory('$history', [function ($timeout) {
+        var $history;
+
+        function go(relativeIndex) {
+            // Always execute history.go asynchronously.
+            // This is required as firefox and IE10 trigger the popstate event
+            // in sync, which would result in problems, as
+            // in backMode we stop the normal navigation by stopping the $locationChangeSuccess event.
+            // However, if we would trigger a popstate event here in sync,
+            // the $locationChangeSuccess event from the poped state event would also be swallowed!
+            // We have a ui test for this (see ngmRoutingUiSpec#$location.back).
+            window.setTimeout(function() {
+                window.history.go(relativeIndex);
+            },0);
+        }
+
+        function onUrlChangeBrowser(url) {
+            $history.activeIndex = $history.urlStack.indexOf(url);
+            if ($history.activeIndex === -1) {
+                onUrlChangeProgrammatically(url, false);
+            } else {
+                $history.fromUrlChange = true;
+            }
+        }
+
+        function onUrlChangeProgrammatically(url, replace, back) {
+            if (back) {
+                var currIndex = $history.activeIndex;
+                var newIndex;
+                for (newIndex = currIndex - 1; newIndex >= 0 && $history.urlStack[newIndex] !== url; newIndex--);
+                if (newIndex !== -1 && currIndex !== -1) {
+                    $history.go(newIndex - currIndex);
+                    // stop the normal navigation!
+                    return false;
+                }
+            }
+            if ($history.urlStack[$history.activeIndex] === url) {
+                return;
+            }
+            $history.fromUrlChange = false;
+            if (!replace) {
+                $history.activeIndex++;
+            }
+            $history.urlStack.splice($history.activeIndex, $history.urlStack.length - $history.activeIndex);
+            $history.urlStack.push(url);
+        }
+
+        return $history = {
+            go:go,
+            urlStack:[],
+            activeIndex:-1,
+            fromUrlChange:false,
+            onUrlChangeProgrammatically:onUrlChangeProgrammatically,
+            onUrlChangeBrowser:onUrlChangeBrowser
+        };
+    }]);
+})(window.jQuery, window.angular);
 (function ($, angular) {
     // Patch for ng-repeat to fire an event whenever the children change.
     // Only watching Scope create/destroy is not enough here, as ng-repeat
@@ -1619,7 +1869,10 @@ factory(window.jQuery, window.angular);
                         lastElement.remove();
                         lastElement = null;
                     }
-                    lastScope && lastScope.$destroy();
+                    if (lastScope) {
+                        lastScope.$destroy();
+                        lastScope = null;
+                    }
                     if (newValue) {
                         lastScope = scope.$new();
                         linker(lastScope, function (clone) {
@@ -1643,9 +1896,12 @@ factory(window.jQuery, window.angular);
 (function (angular) {
     var mod = angular.module('ng');
 
-    function registerEventHandler(scope, element, eventType, handler) {
+    function registerEventHandler(scope, $parse, element, eventType, handler) {
+        var fn = $parse(handler);
         element.bind(eventType, function (event) {
-            var res = scope.$apply(handler, element);
+            scope.$apply(function() {
+                fn(scope, {$event:event});
+            });
             if (eventType.charAt(0) == 'v') {
                 // This is required to prevent a second
                 // click event, see
@@ -1656,149 +1912,38 @@ factory(window.jQuery, window.angular);
     }
 
     function createEventDirective(directive, eventType) {
-        mod.directive(directive, function () {
-            return function (scope, element,attrs) {
+        mod.directive(directive, ['$parse', function ($parse) {
+            return function (scope, element, attrs) {
                 var eventHandler = attrs[directive];
-                registerEventHandler(scope, element, eventType, eventHandler);
+                registerEventHandler(scope, $parse, element, eventType, eventHandler);
             };
-        });
+        }]);
     }
 
-    var eventDirectives = {ngmTaphold:'taphold', ngmSwipe:'swipe', ngmSwiperight:'swiperight',
-        ngmSwipeleft:'swipeleft',
-        ngmPagebeforeshow:'pagebeforeshow',
-        ngmPagebeforehide:'pagebeforehide',
-        ngmPageshow:'pageshow',
-        ngmPagehide:'pagehide',
-        ngmClick:'vclick'
-    };
-    for (var directive in eventDirectives) {
-        createEventDirective(directive, eventDirectives[directive])
+    // See http://jquerymobile.com/demos/1.2.0/docs/api/events.html
+    var jqmEvents = ['tap', 'taphold', 'swipe', 'swiperight', 'swipeleft', 'vmouseover',
+        'vmouseout',
+        'vmousedown',
+        'vmousemove',
+        'vmouseup',
+        'vclick',
+        'vmousecancel',
+        'orientationchange',
+        'scrollstart',
+        'scrollend',
+        'pagebeforeshow',
+        'pagebeforehide',
+        'pageshow',
+        'pagehide'
+    ];
+    var event, directive, i;
+    for (i=0; i<jqmEvents.length; i++) {
+        event = jqmEvents[i];
+        directive = 'ngm' + event.substring(0, 1).toUpperCase() + event.substring(1);
+        createEventDirective(directive, event);
     }
 
 })(angular);
-(function($, angular) {
-    function splitAtFirstColon(value) {
-        var pos = value.indexOf(':');
-        if (pos===-1) {
-            return [value];
-        }
-        return [
-            value.substring(0, pos),
-            value.substring(pos+1)
-        ];
-    }
-
-    function instrumentUrlHistoryToSavePageId() {
-        var lastToPage;
-        $(document).on("pagebeforechange", function(event, data) {
-            if (typeof data.toPage === "object") {
-                lastToPage = data.toPage;
-            }
-        });
-        var urlHistory = $.mobile.urlHistory;
-        var _addNew = urlHistory.addNew;
-        urlHistory.addNew = function() {
-            var res = _addNew.apply(this, arguments);
-            var lastEntry = urlHistory.stack[urlHistory.stack.length-1];
-            lastEntry.pageId = lastToPage.attr("id");
-            return res;
-        }
-    }
-    instrumentUrlHistoryToSavePageId();
-
-    function getNavigateIndexInHistory(pageId) {
-        var urlHistory = $.mobile.urlHistory;
-        var activeIndex = urlHistory.activeIndex;
-        var stack = $.mobile.urlHistory.stack;
-        for (var i = stack.length - 1; i >= 0; i--) {
-            if (i!==activeIndex && stack[i].pageId === pageId) {
-                return i - activeIndex;
-            }
-        }
-        return undefined;
-    }
-
-    function callActivateFnOnPageChange(fnName, params) {
-        if (fnName) {
-            $(document).one("pagebeforechange", function(event, data) {
-                var toPageUrl = $.mobile.path.parseUrl( data.toPage );
-                var page = $("#"+toPageUrl.hash.substring(1));
-                function executeCall() {
-                    var scope = page.scope();
-                    scope[fnName].apply(scope, params);
-                }
-                if (!page.data("page")) {
-                    page.one("pagecreate", executeCall);
-                    return;
-                }
-                executeCall();
-            });
-        }
-    }
-
-    /*
-     * Service for page navigation.
-     * @param target has the syntax: [<transition>:]pageId
-     * @param activateFunctionName Function to call in the target scope.
-     * @param further params Parameters for the function that should be called in the target scope.
-     */
-    function navigate(target, activateFunctionName) {
-        var activateParams = Array.prototype.slice.call(arguments, 2);
-        callActivateFnOnPageChange(activateFunctionName, activateParams);
-        var navigateOptions;
-        if (typeof target === 'object') {
-            navigateOptions = target;
-            target = navigateOptions.target;
-        }
-        var parts = splitAtFirstColon(target);
-        var isBack = false;
-        if (parts.length === 2 && parts[0] === 'back') {
-            isBack = true;
-            target = parts[1];
-        } else if (parts.length === 2) {
-            navigateOptions = { transition: parts[0] };
-            target = parts[1];
-        }
-        if (target === 'back') {
-            window.history.go(-1);
-            return;
-        }
-        if (isBack) {
-            // The page may be removed from the DOM by the cache handling
-            // of jquery mobile.
-            $.mobile.loadPage(target, {showLoadMsg: true}).then(function(_a,_b,page) {
-                var relativeIndex = getNavigateIndexInHistory(page.attr("id"));
-                if (relativeIndex!==undefined) {
-                    window.history.go(relativeIndex);
-                } else {
-                    jqmChangePage(target, {reverse: true});
-                }
-            });
-        } else {
-            jqmChangePage(target, navigateOptions);
-        }
-    }
-
-    function jqmChangePage(target, navigateOptions) {
-        if (navigateOptions) {
-            $.mobile.changePage(target, navigateOptions);
-        } else {
-            $.mobile.changePage(target);
-        }
-    }
-
-
-    var mod = angular.module('ng');
-    mod.factory('$navigate', function() {
-        return navigate;
-    });
-
-
-
-    return navigate;
-
-})($, angular);
 (function(angular) {
     var storageName = '$$sharedControllers';
 
@@ -1860,137 +2005,129 @@ factory(window.jQuery, window.angular);
         };
     }]);
 })(angular);
-(function($, angular) {
-    var showCalls = [];
+(function ($, angular) {
 
-    function onClick(event) {
-        var lastCall = showCalls[showCalls.length - 1];
-        if (lastCall.callback) {
-            rootScope.$apply(function() {
-                lastCall.callback.apply(this, arguments);
+    function waitDialogFactory(rootScope) {
+
+        var showCalls = [];
+
+        function onClick(event) {
+            var lastCall = showCalls[showCalls.length - 1];
+            if (lastCall.callback) {
+                rootScope.$apply(function () {
+                    lastCall.callback.apply(this, arguments);
+                });
+            }
+            // This is required to prevent a second
+            // click event, see
+            // https://github.com/jquery/jquery-mobile/issues/1787
+            event.preventDefault();
+        }
+
+        var loadDialog;
+
+        $(document).delegate(".ui-loader", "vclick", onClick);
+
+        if (!$.mobile.loader.prototype.options.textWithCancel) {
+            $.mobile.loader.prototype.options.textWithCancel = 'Loading. Click to cancel.';
+        }
+
+        function updateUi() {
+            if (!$.mobile.firstPage) {
+                rootScope.$on("jqmInit", updateUi);
+                return;
+            }
+            if (showCalls.length > 0) {
+                var lastCall = showCalls[showCalls.length - 1];
+                var msg = lastCall.msg;
+                if (msg) {
+                    $.mobile.loading('show', {text:msg, textVisible:!!msg});
+                } else {
+                    $.mobile.loading('show');
+                }
+            } else {
+                $.mobile.loading('hide');
+            }
+        }
+
+        /**
+         * jquery mobile hides the wait dialog when pages are transitioned.
+         * This immediately closes wait dialogs that are opened in the pagebeforeshow event.
+         */
+        $('div').live('pageshow', function (event, ui) {
+            updateUi();
+        });
+
+        /**
+         *
+         * @param msg (optional)
+         * @param tapCallback (optional)
+         */
+        function show() {
+            var msg, tapCallback;
+            if (typeof arguments[0] == 'string') {
+                msg = arguments[0];
+            }
+            if (typeof arguments[0] == 'function') {
+                tapCallback = arguments[0];
+            }
+            if (typeof arguments[1] == 'function') {
+                tapCallback = arguments[1];
+            }
+
+            showCalls.push({msg:msg, callback:tapCallback});
+            updateUi();
+        }
+
+        function hide() {
+            showCalls.pop();
+            updateUi();
+        }
+
+        function always(promise, callback) {
+            promise.then(callback, callback);
+        }
+
+        /**
+         *
+         * @param promise
+         * @param msg (optional)
+         */
+        function waitFor(promise, msg) {
+            show(msg);
+            always(promise, function () {
+                hide();
             });
         }
-        // This is required to prevent a second
-        // click event, see
-        // https://github.com/jquery/jquery-mobile/issues/1787
-        event.preventDefault();
-    }
 
-    var loadDialog;
-
-    function initIfNeeded() {
-        if (!loadDialog || loadDialog.length == 0) {
-            loadDialog = $(".ui-loader");
-            loadDialog.bind('vclick', onClick);
-        }
-    }
-
-    if (!$.mobile.loadingMessageWithCancel) {
-        $.mobile.loadingMessageWithCancel = 'Loading. Click to cancel.';
-    }
-
-    function updateUi() {
-        initIfNeeded();
-        if (showCalls.length > 0) {
-            var lastCall = showCalls[showCalls.length - 1];
-            var msg = lastCall.msg;
-            var oldMessage = $.mobile.loadingMessage;
-            var oldTextVisible = $.mobile.loadingMessageTextVisible;
-            if (msg) {
-                $.mobile.loadingMessage = msg;
-                $.mobile.loadingMessageTextVisible = true;
+        /**
+         *
+         * @param deferred
+         * @param cancelData
+         * @param msg (optional)
+         */
+        function waitForWithCancel(deferred, cancelData, msg) {
+            if (!msg) {
+                msg = $.mobile.loader.prototype.options.textWithCancel;
             }
-            $.mobile.showPageLoadingMsg();
-            $.mobile.loadingMessageTextVisible = oldTextVisible;
-            $.mobile.loadingMessage = oldMessage;
-        } else {
-            $.mobile.hidePageLoadingMsg();
-        }
-    }
-
-    /**
-     * jquery mobile hides the wait dialog when pages are transitioned.
-     * This immediately closes wait dialogs that are opened in the pagebeforeshow event.
-     */
-    $('div').live('pageshow', function(event, ui) {
-        updateUi();
-    });
-
-    /**
-     *
-     * @param msg (optional)
-     * @param tapCallback (optional)
-     */
-    function show() {
-        var msg, tapCallback;
-        if (typeof arguments[0] == 'string') {
-            msg = arguments[0];
-        }
-        if (typeof arguments[0] == 'function') {
-            tapCallback = arguments[0];
-        }
-        if (typeof arguments[1] == 'function') {
-            tapCallback = arguments[1];
+            show(msg, function () {
+                deferred.reject(cancelData);
+            });
+            always(deferred.promise, function () {
+                hide();
+            });
         }
 
-        showCalls.push({msg: msg, callback: tapCallback});
-        updateUi();
+        return {
+            show:show,
+            hide:hide,
+            waitFor:waitFor,
+            waitForWithCancel:waitForWithCancel
+        };
     }
-
-    function hide() {
-        showCalls.pop();
-        updateUi();
-    }
-
-    function always(promise, callback) {
-        promise.then(callback, callback);
-    }
-
-    /**
-     *
-     * @param promise
-     * @param msg (optional)
-     */
-    function waitFor(promise, msg) {
-        show(msg);
-        always(promise, function() {
-            hide();
-        });
-    }
-
-    /**
-     *
-     * @param deferred
-     * @param cancelData
-     * @param msg (optional)
-     */
-    function waitForWithCancel(deferred, cancelData, msg) {
-        if (!msg) {
-            msg = $.mobile.loadingMessageWithCancel;
-        }
-        show(msg, function() {
-            deferred.reject(cancelData);
-        });
-        always(deferred.promise, function() {
-            hide();
-        });
-    }
-
-    var res = {
-        show: show,
-        hide: hide,
-        waitFor: waitFor,
-        waitForWithCancel:waitForWithCancel
-    };
 
     var mod = angular.module('ng');
-    var rootScope;
-    mod.factory('$waitDialog', ['$rootScope', function($rootScope) {
-        rootScope = $rootScope;
-        return res;
-    }]);
-
-    return res;
+    mod.factory('$waitDialog', ['$rootScope', waitDialogFactory]);
 })($, angular);
 (function ($, angular) {
 
@@ -2026,7 +2163,8 @@ factory(window.jQuery, window.angular);
             }
             state.hasMore = endIndex < list.length;
             state.endIndex = endIndex;
-            return list.slice(0, endIndex);
+            state.cache = list.slice(0, endIndex);
+            return state.cache;
         }
     }
 

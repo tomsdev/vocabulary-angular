@@ -6,6 +6,28 @@
         }
     }
 
+    // patch for selectmenu when it opens a menu in an own page
+    $( document ).bind( "selectmenubeforecreate", function( event ) {
+        var selectmenuWidget = $( event.target ).data( "selectmenu" );
+        patch(selectmenuWidget, 'close', function (old, self, args) {
+            if (self.options.disabled || !self.isOpen) {
+                return;
+            }
+            if (self.menuType === "page") {
+                // See mobile.dialog#close for the same logic as here!
+                var dst = $.mobile.urlHistory.getPrev().url;
+                if (!$.mobile.path.isPath(dst)) {
+                    dst = $.mobile.path.makeUrlAbsolute("#" + dst);
+                }
+
+                $.mobile.changePage(dst, { changeHash:false, fromHashChange:true });
+                self.isOpen = false;
+            } else {
+                old.apply(self, args);
+            }
+        });
+    });
+
     // selectmenu may create parent elements and extra pages
     patch($.mobile.selectmenu.prototype, 'destroy', function (old, self, args) {
         old.apply(self, args);
@@ -16,6 +38,10 @@
         screen && screen.remove();
         listbox && listbox.remove();
     });
+
+    // native selectmenu throws an error is no option is contained!
+    $.mobile.selectmenu.prototype.placeholder = "";
+
 
     // Listview may create subpages that need to be removed when the widget is destroyed.
     patch($.mobile.listview.prototype, "destroy", function (old, self, args) {
@@ -59,32 +85,20 @@
 
     // Patch 1: controlgroup should not exclude invisible children
     // as long as it is not visible itself!
-    // Patch 2: to refresh a controlgroup we call it multiple times.
-    // However, controlgroup then wraps its children multiple times
-    // in nested divs.
-
     patch($.fn, "controlgroup", function (old, self, args) {
-        var _wrapInner = $.fn.wrapInner;
-        if (self.children(".ui-controlgroup-controls").length>0) {
-            $.fn.wrapInner = function() { };
+        if (self.filter(":visible").length === 0) {
+            var options = args[0] || {};
+            options.excludeInvisible = false;
+            return old.call(self, options);
         }
-        try {
-            if (self.filter(":visible").length === 0) {
-                var options = args[0] || {};
-                options.excludeInvisible = false;
-                return old.call(self, options);
-            }
-            return old.apply(self, args);
-        } finally {
-            $.fn.wrapInner = _wrapInner;
-        }
+        return old.apply(self, args);
     });
 
     // collapsible has problems when a collapsible is created with a nested collapsible,
     // if the nested collapsible is created before the outside collapsible.
     var _c = $.fn.collapsible;
     var nestedContentClass = "ui-collapsible-content";
-    $.fn.collapsible = function() {
+    $.fn.collapsible = function () {
         var nestedContent = this.find(".ui-collapsible-content");
         nestedContent.removeClass(nestedContentClass);
         try {
@@ -95,11 +109,35 @@
     };
 
     // navbar does not contain a refresh function, so we add it here.
-    $.mobile.navbar.prototype.refresh = function() {
-        var $navbar = this.element,
-            $navbtns = $navbar.find( "a" ),
-            iconpos = $navbtns.filter( ":jqmData(icon)" ).length ?
-                this.options.iconpos : undefined;
+
+    patch($.mobile.navbar.prototype, '_create', function (old, self, args) {
+        var _find = $.fn.find;
+        var navbar = self.element;
+        var navbarBtns;
+        $.fn.find = function (selector) {
+            var res = _find.apply(this, arguments);
+            if (selector === 'a') {
+                navbar.data('$navbtns', res);
+            }
+            return res;
+        };
+        try {
+            return old.apply(self, args);
+        } finally {
+            $.fn.find = _find;
+        }
+    });
+
+    $.mobile.navbar.prototype.refresh = function () {
+        var $navbar = this.element;
+
+        var $navbtns = $navbar.data("$navbtns");
+        $navbtns.splice(0, $navbtns.length);
+        $.each($navbar.find("a"), function (key, value) {
+            $navbtns.push(value);
+        });
+        var iconpos = $navbtns.filter(":jqmData(icon)").length ?
+            this.options.iconpos : undefined;
 
         var list = $navbar.find("ul");
         var listEntries = list.children("li");
@@ -109,14 +147,13 @@
         listEntries.removeClass(function (index, css) {
             return (css.match(/\bui-block-\S+/g) || []).join(' ');
         });
-        list.jqmEnhanceable().grid({ grid: this.options.grid });
+        list.jqmEnhanceable().grid({ grid:this.options.grid });
 
         $navbtns.buttonMarkup({
-            corners:	false,
-            shadow:		false,
-            inline:     true,
-            iconpos:	iconpos
+            corners:false,
+            shadow:false,
+            inline:true,
+            iconpos:iconpos
         });
     };
-
-})($);
+})(window.jQuery);

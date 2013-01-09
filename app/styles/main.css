@@ -4,3 +4,19 @@
 .ui-field-contain input.ui-input-text, .ui-field-contain textarea.ui-input-text {
 	margin-bottom: 10px;
 }
+
+.half {
+	width: 49%;
+}
+
+.left {
+	float: left;
+}
+
+.right {
+	float: right;
+}
+
+.centerText {
+	text-align: center;
+}

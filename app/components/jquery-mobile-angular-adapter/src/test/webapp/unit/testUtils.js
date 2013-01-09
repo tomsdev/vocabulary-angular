@@ -1,13 +1,26 @@
 (function($, angular, window) {
 
+
     beforeEach(function() {
         $(".temp").remove();
         $(":jqmData(role='page')").remove();
         $.mobile.pageContainer = $("body");
-        $.mobile.firstPage = [];
+        $.mobile.firstPage = $();
+        $.mobile.urlHistory.stack = [ {url : 'someUrl' } ];
+        $.mobile.urlHistory.activeIndex = 0;
+        $.mobile.origChangePage = $.mobile.changePage;
+        spyOn($.mobile, 'changePage');
+        spyOn(window.history, 'go');
         module("ng", function($provide) {
             $provide.value('$rootElement', $("body"));
+            var i;
+            for (i=0; i<$.mobile._registerBrowserDecorators.length; i++) {
+                $.mobile._registerBrowserDecorators[i]($provide);
+            }
         });
+        spyOn(angular.mock.$Browser.prototype, 'url').andCallThrough();
+        $.mobile.popup.active = undefined;
+        jasmine.Clock.installMock();
     });
 
     afterEach(function() {
@@ -68,13 +81,13 @@
     }
 
     function compileInPage(html, pageControllerName) {
-        var elements = test$("<div>"+html+"</div>").children().addClass("result", "true");
+        var container = test$("<div>"+html+"</div>");
         var page = test$('<div id="start" data-role="page" data-url="start"><div data-role="content"></div></div>');
         test$("body").append(page);
         if (pageControllerName) {
             page.attr('ng-controller', pageControllerName);
         }
-        page.find(":jqmData(role='content')").append(elements);
+        page.find(":jqmData(role='content')").append(container);
 
         inject(function($compile, $rootScope) {
             $compile(page)($rootScope);
@@ -84,7 +97,7 @@
         page.addClass("temp", "true");
         return {
             page: page,
-            element: $(".result").removeClass("result")
+            element: container.children()
         }
     }
 

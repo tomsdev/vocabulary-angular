@@ -1,6 +1,70 @@
 Changelog
 =====================
 
+1.1.2
+-------------
+Breaking changes:
+
+- The url to start an app at a specific page (i.e. not the first page) changed.
+- `$navigate` is no more. Please use the new angular route integration and
+  the extensions to the `$location` service instead.
+- Changed `ngm-click` to `ngm-vclick` as this matches directly to the jqm docs.
+- Location for Wait-Dialog default messages changed.
+
+New features:
+
+- support for angular routes for jqm pages.
+- general `$history` service and extensions to the `$location` service to
+  control history and route parameters for a single route call.
+- added missing event directives.
+
+Internal changes:
+
+- updated to angular 1.0.3 and jqm 1.2.0
+- internal refactorings and simplifications.
+
+Migration for the old `$navigate` service:
+
+- `$navigate('back:somePage')`: going back to an url in history. Replace with:
+
+        $location.url('somePage');
+        $location.backMode();
+
+- `$navigate('back')`: Going back on step in history. Replace with: `$location.goBack();`
+
+- `$navigate('slide:somePage')`: showing a page with a special transition. Replace with:
+
+        $location.url('somePage');
+        $location.routeOverride({
+            jqmOptions: 'slide'
+        });
+
+- `$navigate('somePage', 'someFn', param1, param2, ...)`: Showing a page an calling the given function on the scope
+   of that page before the page is shown. Replace with:
+
+        $location.url('somePage');
+        $location.routeOverride({
+            locals: {
+                param1: param1,
+                param2: param2,
+                ...
+            },
+            onActivate: 'someFn(param1, param2, ...)'
+        });
+
+Beyond this, you can define default values for `onActivate` and `jqmOptions` on routes directly when they are defined,
+e.g.:
+
+    $routeProvider.when('/somePage', {
+        templateUrl:'someTemplate.html',
+        jqmOptions: { transition: 'flip' },
+        onActivate: 'someFn(a)',
+        resolve: {
+            a: function() { return 'hello'; }
+        }
+    });
+
+
 1.1.1
 -------------
 - Updated to jquery mobile 1.1.1
