@@ -7,22 +7,24 @@ describe('Controller: MainCtrl', function() {
 
   var MainCtrl,
 	    scope,
-	    navigateMock;
+	    locationMock;
 
   // Initialize the controller and a mock scope
   beforeEach(inject(function($controller) {
-	  navigateMock = jasmine.createSpy();
+    locationMock = {
+        goBack: jasmine.createSpy()
+    };
 
     MainCtrl = $controller('MainCtrl', {
       $scope: scope= {},
-	    $navigate: navigateMock
+        $location: locationMock
     });
   }));
 
 	describe('back', function() {
 		it('should navigate back', function() {
 			scope.back();
-			expect(navigateMock).toHaveBeenCalledWith('back');
+			expect(locationMock.goBack).toHaveBeenCalled();
 		})
 	})
 });

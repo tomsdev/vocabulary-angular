@@ -3,7 +3,7 @@
 /**
  * Data service for the words objects.
  */
-vocabularyAngularApp.service('wordsDataService', function(dataStorage) {
+vocabularyAngularApp.service('wordsDataService', ['dataStorage', function(dataStorage) {
 
 	var isInit = false,
 			dataStore = "wordsdatastore",
@@ -78,4 +78,4 @@ vocabularyAngularApp.service('wordsDataService', function(dataStorage) {
 			dataStorage.setObject(dataStore, data);
 		}
 	};
-});
+}]);

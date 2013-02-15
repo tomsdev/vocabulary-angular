@@ -14,9 +14,9 @@ vocabularyAngularApp.service('dataStorage', function() {
 		setValue: function(key, val) {
 			//try {
 				localStorage.setItem(key, val);
-//			catch(e) {
-//				console.log("data not saved in local storage, error given: " + e);
-//			}
+			//catch(e) {
+				//console.log("data not saved in local storage, error given: " + e);
+			//}
 		},
 		getObject: function(key) {
 			var json = this.getValue(key);
