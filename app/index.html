@@ -88,7 +88,7 @@
 				<a href="#add" data-role="button">Add</a>
 			</div>
 
-			<div data-role="content" ngm-if="!isQuizEnd">
+			<div data-role="content" ngm-if="!isQuizEnd && !isQuizEmpty">
 				<ul data-role="listview" data-inset="true">
 					<li>
 						<p><h3>{{getCurrentWord().text}}</h3></p>
@@ -122,6 +122,10 @@
 
 			<div data-role="content" ngm-if="isQuizEnd">
 				<h3 class="centerText">Quiz end</h3>
+			</div>
+
+			<div data-role="content" ngm-if="isQuizEmpty">
+				<h3 class="centerText">You must add words to your vocabulary list before doing a Quiz</h3>
 			</div>
 
 		</div>

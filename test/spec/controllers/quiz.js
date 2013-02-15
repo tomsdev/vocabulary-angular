@@ -33,6 +33,8 @@ describe('Controller: QuizCtrl', function() {
       $scope: scope = {},
 	    wordsDataService: wordsDataServiceMock
     });
+
+    scope.onPageEnter();
   }));
 
 	it('should attach the quiz index with value 0', function() {
@@ -46,6 +48,10 @@ describe('Controller: QuizCtrl', function() {
 	it('should attach the quiz end indicator with value false', function() {
 		expect(scope.isQuizEnd).toBe(false);
 	});
+
+  it('should attach the quiz empty indicator with value false if there is words', function() {
+    expect(scope.isQuizEmpty).toBe(false);
+  });
 
 	describe('getCurrentWord', function() {
 		it('should return the first word', function() {

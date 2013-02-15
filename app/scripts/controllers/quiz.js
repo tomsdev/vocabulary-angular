@@ -7,23 +7,26 @@ vocabularyAngularApp.controller('QuizCtrl', ["$scope", "wordsDataService", funct
 	var words = wordsDataService.get();
 
 	$scope.onPageEnter = function() {
+    /**
+     * Index of the current word in the quiz.
+     * @type {Number}
+     */
 		$scope.quizIndex = 0;
+
+    /**
+     * Indicates when there is no more words in the quiz.
+     * @type {Boolean}
+     */
 		$scope.isQuizEnd = false;
+
+    /**
+     * Indicates when there is no words to start a quiz.
+     * @type {Boolean}
+     */
+    $scope.isQuizEmpty = words.length > 0 ? false : true;
+
+    $scope.isAnswerVisible = false;
 	};
-
-	/**
-	 * Index of the current word in the quiz.
-	 * @type {Number}
-	 */
-	$scope.quizIndex = 0;
-
-	/**
-	 * Indicates when there is no more words in the quiz.
-	 * @type {Boolean}
-	 */
-	$scope.isQuizEnd = false;
-
-	$scope.isAnswerVisible = false;
 
 	$scope.getCurrentWord = function() {
 		return words[$scope.quizIndex];
